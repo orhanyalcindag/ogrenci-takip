@@ -1,0 +1,17 @@
+# Node / npm
+node_modules/
+.npm
+
+# OS / Sistem
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editörler
+.vscode/
+.idea/
+*.suo
+*.user
+
+# Vercel
+.vercel

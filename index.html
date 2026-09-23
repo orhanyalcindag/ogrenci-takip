@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meslek Lisesi - Öğrenci Uygulama Notlandırma ve Takip Sistemi</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💻</text></svg>">
+</head>
+<body>
+
+    <!-- ========================================== -->
+    <!-- 0. KULLANICI GİRİŞ EKRANI (LOGIN SCREEN)   -->
+    <!-- ========================================== -->
+    <div id="loginScreen" class="login-screen">
+        <div class="login-orb login-orb-1"></div>
+        <div class="login-orb login-orb-2"></div>
+
+        <div class="login-card">
+            <div class="login-header">
+                <div class="login-logo">💻</div>
+                <h2>Öğretmen Giriş Paneli</h2>
+                <p id="loginSubtitle">Mesleki ve Teknik Anadolu Lisesi<br>Laboratuvar Uygulama & Not Takip Sistemi</p>
+            </div>
+
+            <form id="loginForm" class="login-form" onsubmit="event.preventDefault(); handleLoginSubmit();">
+                <div class="login-field">
+                    <label for="loginUsername">Kullanıcı Adı</label>
+                    <div class="login-input-wrap">
+                        <span class="login-input-icon">👤</span>
+                        <input type="text" id="loginUsername" class="login-input" placeholder="Kullanıcı adınızı girin" autocomplete="username" required>
+                    </div>
+                </div>
+
+                <div class="login-field">
+                    <label for="loginPassword">Şifre</label>
+                    <div class="login-input-wrap">
+                        <span class="login-input-icon">🔒</span>
+                        <input type="password" id="loginPassword" class="login-input" placeholder="Şifrenizi girin" autocomplete="current-password" required>
+                        <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('loginPassword', this)" title="Şifreyi Göster/Gizle">👁️</button>
+                    </div>
+                </div>
+
+                <div id="loginErrorMsg" style="display: none; color: var(--danger); font-size: 0.82rem; font-weight: 700; text-align: center; background: var(--danger-light); padding: 0.65rem; border-radius: var(--radius-sm); border: 1px solid var(--danger-border);">
+                    Kullanıcı adı veya şifre hatalı!
+                </div>
+
+                <button type="submit" class="login-btn">
+                    <span>Sisteme Giriş Yap</span>
+                    <span>➔</span>
+                </button>
+            </form>
+
+            <div class="login-hint-badge">
+                <span>💡 Varsayılan: <strong>admin</strong> / <strong>1234</strong></span>
+                <button type="button" onclick="fillDefaultLogin()">Hızlı Doldur</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ========================================== -->
+    <!-- 1. ÜST BAŞLIK (HEADER)                     -->
+    <!-- ========================================== -->
+    <header class="app-header">
+        <div class="header-container">
+            <div class="brand-section">
+                <div class="brand-icon">💻</div>
+                <div class="brand-info">
+                    <h1 id="headerSchoolName">Mesleki ve Teknik Anadolu Lisesi</h1>
+                    <p>
+                        <span id="headerTeacherName">Bilişim Teknolojileri Alanı</span>
+                        <span style="color: var(--border);">|</span>
+                        <span style="display: inline-flex; align-items: center; gap: 0.35rem; color: var(--success); font-weight: 700;">
+                            <span class="status-online-dot"></span> Çevrimdışı Güvenli Mod
+                        </span>
+                    </p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <div class="user-profile-chip">
+                    <div class="user-avatar" id="headerAvatar">Ö</div>
+                    <span class="user-name-text" id="headerCurrentUserName">admin</span>
+                </div>
+                <button class="btn btn-outline btn-sm no-print" onclick="window.print()" title="Mevcut Çizelgeyi Yazdır">
+                    🖨️ Yazdır / PDF
+                </button>
+                <button class="btn-logout no-print" onclick="handleLogout()" title="Oturumu Kapat">
+                    🚪 Çıkış Yap
+                </button>
+            </div>
+        </div>
+    </header>
+
+
+    <!-- ========================================== -->
+    <!-- 2. MENÜ / SEKMELER (NAV)                   -->
+    <!-- ========================================== -->
+    <nav class="app-nav-bar no-print">
+        <div class="nav-container">
+            <button class="nav-tab active" data-view="view-grading">
+                <span>📝 Hızlı Not Girişi</span>
+            </button>
+            <button class="nav-tab" data-view="view-matrix">
+                <span>📊 Not Çizelgesi & Raporlar</span>
+            </button>
+            <button class="nav-tab" data-view="view-courses">
+                <span>📚 Dersler</span>
+                <span class="tab-badge" id="badgeCourseCount">0</span>
+            </button>
+            <button class="nav-tab" data-view="view-classes">
+                <span>🏫 Sınıflar</span>
+                <span class="tab-badge" id="badgeClassCount">0</span>
+            </button>
+            <button class="nav-tab" data-view="view-students">
+                <span>👥 Öğrenciler</span>
+                <span class="tab-badge" id="badgeStudentCount">0</span>
+            </button>
+            <button class="nav-tab" data-view="view-assignments">
+                <span>📋 Uygulamalar / Görevler</span>
+                <span class="tab-badge" id="badgeAssignmentCount">0</span>
+            </button>
+            <button class="nav-tab" data-view="view-settings">
+                <span>⚙️ Ayarlar & Şifre</span>
+            </button>
+        </div>
+    </nav>
+
+
+    <!-- ========================================== -->
+    <!-- 3. ANA İÇERİK ALANI                        -->
+    <!-- ========================================== -->
+    <main class="main-content">
+
+        <!-- ========================================== -->
+        <!-- VIEW 1: HIZLI NOT GİRİŞİ                   -->
+        <!-- ========================================== -->
+        <section id="view-grading" class="view-section active">
+            <!-- Seçim ve İşlem Çubuğu -->
+            <div class="action-bar no-print">
+                <div class="filter-group">
+                    <div class="filter-item">
+                        <label class="filter-label" for="gradingCourseSelect">1. Dersi Seçin</label>
+                        <select id="gradingCourseSelect" class="form-select"></select>
+                    </div>
+                    <div class="filter-item">
+                        <label class="filter-label" for="gradingClassSelect">2. Sınıfı Seçin</label>
+                        <select id="gradingClassSelect" class="form-select"></select>
+                    </div>
+                    <div class="filter-item">
+                        <label class="filter-label" for="gradingAssignmentSelect">3. Uygulamayı Seçin</label>
+                        <select id="gradingAssignmentSelect" class="form-select" style="min-width: 250px;"></select>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 0.6rem; align-items: flex-end;">
+                    <button class="btn btn-primary btn-sm" onclick="openNewAssignmentModal(document.getElementById('gradingCourseSelect').value)">
+                        ➕ Yeni Uygulama Ekle
+                    </button>
+                    <button class="btn btn-outline btn-sm" onclick="openBulkStudentModal(document.getElementById('gradingClassSelect').value)">
+                        📋 Sınıfa Öğrenci Ekle
+                    </button>
+                </div>
+            </div>
+
+            <!-- İstatistik Kartları -->
+            <div id="gradingStatsContainer"></div>
+
+            <!-- Not Giriş Tablosu -->
+            <div class="card">
+                <div class="card-header no-print">
+                    <div class="card-title-group">
+                        <h2>Laboratuvar Uygulama Notlandırma</h2>
+                        <p>Puanı yazıp <strong>Enter</strong> veya <strong>Aşağı Ok (↓)</strong> ile sıradaki öğrenciye geçin. <strong>G</strong> tuşu ile gelmeyen öğrenciyi tek tuşla işaretleyin.</p>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <span style="font-size: 0.82rem; color: var(--success); font-weight: 700; display: flex; align-items: center; gap: 0.4rem; background: var(--success-light); padding: 0.35rem 0.75rem; border-radius: var(--radius-full); border: 1px solid var(--success-border);">
+                            <span>💾</span> Otomatik Kaydedilir
+                        </span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="gradingTableContainer"></div>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ========================================== -->
+        <!-- VIEW 2: NOT ÇİZELGESİ VE RAPORLAR          -->
+        <!-- ========================================== -->
+        <section id="view-matrix" class="view-section">
+            <div class="action-bar no-print">
+                <div class="filter-group">
+                    <div class="filter-item">
+                        <label class="filter-label" for="matrixCourseSelect">Ders Seçin</label>
+                        <select id="matrixCourseSelect" class="form-select"></select>
+                    </div>
+                    <div class="filter-item">
+                        <label class="filter-label" for="matrixClassSelect">Sınıf Seçin</label>
+                        <select id="matrixClassSelect" class="form-select"></select>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 0.6rem;">
+                    <button class="btn btn-primary btn-sm" onclick="window.print()">
+                        🖨️ Resmi Çizelgeyi Yazdır / PDF
+                    </button>
+                    <button class="btn btn-success btn-sm" onclick="exportMatrixToCSV()">
+                        📥 Excel / CSV Olarak İndir
+                    </button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-body">
+                    <div id="matrixTableContainer"></div>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ========================================== -->
+        <!-- VIEW 3: DERSLER                            -->
+        <!-- ========================================== -->
+        <section id="view-courses" class="view-section">
+            <div class="action-bar">
+                <div class="card-title-group">
+                    <h2>Tanımlı Dersler</h2>
+                    <p>Müfredattaki derslerinizi, kodlarını ve bu derslere ait laboratuvar görevlerini yönetin.</p>
+                </div>
+                <button class="btn btn-primary" onclick="openCourseModal()">
+                    ➕ Yeni Ders Ekle
+                </button>
+            </div>
+
+            <div id="coursesListContainer"></div>
+        </section>
+
+
+        <!-- ========================================== -->
+        <!-- VIEW 4: SINIFLAR                           -->
+        <!-- ========================================== -->
+        <section id="view-classes" class="view-section">
+            <div class="action-bar">
+                <div class="card-title-group">
+                    <h2>Kayıtlı Sınıflar ve Şubeler</h2>
+                    <p>Sınıflarınızı yönetin, her sınıfa öğrenci tanımlayın.</p>
+                </div>
+                <button class="btn btn-primary" onclick="openClassModal()">
+                    ➕ Yeni Sınıf Ekle
+                </button>
+            </div>
+
+            <div id="classesListContainer"></div>
+        </section>
+
+
+        <!-- ========================================== -->
+        <!-- VIEW 5: ÖĞRENCİLER                         -->
+        <!-- ========================================== -->
+        <section id="view-students" class="view-section">
+            <div class="action-bar">
+                <div class="filter-group">
+                    <div class="filter-item">
+                        <label class="filter-label" for="studentClassFilter">Sınıfa Göre Filtrele</label>
+                        <select id="studentClassFilter" class="form-select"></select>
+                    </div>
+                    <div class="filter-item">
+                        <label class="filter-label" for="studentSearchInput">Öğrenci Ara</label>
+                        <input type="text" id="studentSearchInput" class="form-input" placeholder="No veya İsim ile ara...">
+                    </div>
+                </div>
+                <div style="display: flex; gap: 0.6rem;">
+                    <button class="btn btn-secondary" onclick="openBulkStudentModal(document.getElementById('studentClassFilter').value)">
+                        📋 Toplu Öğrenci Ekle (Excel / e-Okul)
+                    </button>
+                    <button class="btn btn-primary" onclick="openStudentModal()">
+                        ➕ Tek Öğrenci Ekle
+                    </button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-body">
+                    <div id="studentsListContainer"></div>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ========================================== -->
+        <!-- VIEW 6: UYGULAMALAR / GÖREVLER             -->
+        <!-- ========================================== -->
+        <section id="view-assignments" class="view-section">
+            <div class="action-bar">
+                <div class="filter-group">
+                    <div class="filter-item">
+                        <label class="filter-label" for="assignmentCourseFilter">Derse Göre Filtrele</label>
+                        <select id="assignmentCourseFilter" class="form-select"></select>
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="openNewAssignmentModal(document.getElementById('assignmentCourseFilter').value)">
+                    ➕ Yeni Uygulama Görevi Ekle
+                </button>
+            </div>
+
+            <div id="assignmentsListContainer"></div>
+        </section>
+
+
+        <!-- ========================================== -->
+        <!-- VIEW 7: AYARLAR VE ŞİFRE DEĞİŞTİRME        -->
+        <!-- ========================================== -->
+        <section id="view-settings" class="view-section">
+            <!-- Giriş Bilgileri & Şifre Değiştirme -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title-group">
+                        <h2>🔒 Giriş Bilgileri ve Şifre Yönetimi</h2>
+                        <p>Uygulamaya girişte kullanılan kullanıcı adı ve şifrenizi güncelleyin.</p>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form onsubmit="event.preventDefault(); handleChangePasswordSubmit();">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.25rem;">
+                            <div class="form-group">
+                                <label for="settingUsername">Kullanıcı Adı</label>
+                                <input type="text" id="settingUsername" class="form-input" style="width: 100%;" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="settingCurrentPass">Mevcut Şifre</label>
+                                <input type="password" id="settingCurrentPass" class="form-input" style="width: 100%;" placeholder="Şu anki şifreniz" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="settingNewPass">Yeni Şifre</label>
+                                <input type="password" id="settingNewPass" class="form-input" style="width: 100%;" placeholder="Yeni şifrenizi belirleyin" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">🔐 Şifreyi Güncelle</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Okul ve Öğretmen Bilgileri -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title-group">
+                        <h2>🏫 Okul ve Öğretmen Bilgileri</h2>
+                        <p>Resmi not çizelgesi ve MEB yazdırma çıktılarında yer alacak bilgiler.</p>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form onsubmit="event.preventDefault(); saveSettingsFromForm();">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem;">
+                            <div class="form-group">
+                                <label for="settingSchoolName">Okul Adı</label>
+                                <input type="text" id="settingSchoolName" class="form-input" style="width: 100%;" placeholder="Örn: Atatürk Mesleki ve Teknik Anadolu Lisesi">
+                            </div>
+                            <div class="form-group">
+                                <label for="settingTeacherName">Öğretmen Adı Soyadı</label>
+                                <input type="text" id="settingTeacherName" class="form-input" style="width: 100%;" placeholder="Örn: Orhan YILDIZ">
+                            </div>
+                            <div class="form-group">
+                                <label for="settingDepartment">Alan / Bölüm Adı</label>
+                                <input type="text" id="settingDepartment" class="form-input" style="width: 100%;" placeholder="Örn: Bilişim Teknolojileri Alanı">
+                            </div>
+                            <div class="form-group">
+                                <label for="settingAcademicYear">Eğitim Öğretim Yılı</label>
+                                <input type="text" id="settingAcademicYear" class="form-input" style="width: 100%;" placeholder="Örn: 2024 - 2025">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="margin-top: 0.5rem;">💾 Bilgileri Kaydet</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Veri Güvenliği ve Yedekleme -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title-group">
+                        <h2>💾 Veri Güvenliği ve Flash Bellek ile Taşıma</h2>
+                        <p>Verilerinizi evdeki bilgisayarınıza aktarmak veya güvenceye almak için yedekleyin.</p>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;">
+                        <div style="border: 1px solid var(--border); padding: 1.35rem; border-radius: var(--radius-md); background: #fafbfc;">
+                            <h3 style="font-size: 0.98rem; font-weight: 800; margin-bottom: 0.35rem;">📦 Veritabanını İndir (Yedek Al)</h3>
+                            <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1.15rem; line-height: 1.4;">
+                                Tüm dersleri, sınıfları, öğrencileri, uygulamaları ve verilen notları tek bir JSON dosyası olarak flash belleğinize kaydeder.
+                            </p>
+                            <button class="btn btn-secondary" onclick="exportDatabaseJSON()">
+                                📥 Yedek Dosyasını İndir (.json)
+                            </button>
+                        </div>
+
+                        <div style="border: 1px solid var(--border); padding: 1.35rem; border-radius: var(--radius-md); background: #fafbfc;">
+                            <h3 style="font-size: 0.98rem; font-weight: 800; margin-bottom: 0.35rem;">📤 Yedeği Geri Yükle</h3>
+                            <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1.15rem; line-height: 1.4;">
+                                Daha önce flash belleğe indirdiğiniz JSON yedek dosyasını seçerek tüm verileri sisteme geri yükleyin.
+                            </p>
+                            <label class="btn btn-secondary" style="cursor: pointer;">
+                                📂 Yedek Dosyası Seç
+                                <input type="file" id="importFileInput" accept=".json" style="display: none;" onchange="importDatabaseJSON(this)">
+                            </label>
+                        </div>
+
+                        <div style="border: 1px solid var(--border); padding: 1.35rem; border-radius: var(--radius-md); background: #fafbfc;">
+                            <h3 style="font-size: 0.98rem; font-weight: 800; margin-bottom: 0.35rem;">🔄 Örnek Veri / Sıfırlama</h3>
+                            <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1.15rem; line-height: 1.4;">
+                                Sistemi denemek için örnek sınıfları yükleyebilir veya tüm verileri tamamen temizleyebilirsiniz.
+                            </p>
+                            <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
+                                <button class="btn btn-outline btn-sm" onclick="loadSampleDataPrompt()">
+                                    ✨ Örnek Veri Yükle
+                                </button>
+                                <button class="btn btn-danger btn-sm" onclick="resetAllDataPrompt()">
+                                    🗑️ Sistemi Sıfırla
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+
+    <!-- ========================================== -->
+    <!-- 4. MODAL PENCERELER                        -->
+    <!-- ========================================== -->
+
+    <!-- DERS EKLE/DÜZENLE MODALI -->
+    <div id="courseModal" class="modal-overlay">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3 class="modal-title" id="courseModalTitle">Yeni Ders Ekle</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <form onsubmit="event.preventDefault(); saveCourseFromModal();">
+                <div class="modal-body">
+                    <input type="hidden" id="courseIdInput">
+                    <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label for="courseNameInput">Ders Adı *</label>
+                            <input type="text" id="courseNameInput" class="form-input" style="width: 100%;" placeholder="Örn: Web Tabanlı Uygulama Geliştirme" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="courseCodeInput">Ders Kodu</label>
+                            <input type="text" id="courseCodeInput" class="form-input" style="width: 100%;" placeholder="Örn: WTÜG">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="courseDescInput">Açıklama / Modüller</label>
+                        <textarea id="courseDescInput" class="form-textarea" style="width: 100%;" rows="3" placeholder="Örn: HTML5, CSS3, JavaScript, PHP ve Veritabanı Modülleri"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-modal-close>İptal</button>
+                    <button type="submit" class="btn btn-primary">Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- SINIF EKLE/DÜZENLE MODALI -->
+    <div id="classModal" class="modal-overlay">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3 class="modal-title" id="classModalTitle">Yeni Sınıf Ekle</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <form onsubmit="event.preventDefault(); saveClassFromModal();">
+                <div class="modal-body">
+                    <input type="hidden" id="classIdInput">
+                    <div class="form-group">
+                        <label for="classNameInput">Sınıf / Şube Adı *</label>
+                        <input type="text" id="classNameInput" class="form-input" style="width: 100%;" placeholder="Örn: 11-A Bilişim" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="classDescInput">Açıklama / Laboratuvar</label>
+                        <textarea id="classDescInput" class="form-textarea" style="width: 100%;" rows="3" placeholder="Örn: Bilgisayar Lab 1 - Çarşamba günleri"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-modal-close>İptal</button>
+                    <button type="submit" class="btn btn-primary">Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- TEK ÖĞRENCİ EKLE/DÜZENLE MODALI -->
+    <div id="studentModal" class="modal-overlay">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3 class="modal-title" id="studentModalTitle">Yeni Öğrenci Ekle</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <form onsubmit="event.preventDefault(); saveStudentFromModal();">
+                <div class="modal-body">
+                    <input type="hidden" id="studentIdInput">
+                    <div class="form-group">
+                        <label for="studentModalClassSelect">Sınıfı *</label>
+                        <select id="studentModalClassSelect" class="form-select" style="width: 100%;" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="studentNumberInput">Okul Numarası *</label>
+                        <input type="text" id="studentNumberInput" class="form-input" style="width: 100%;" placeholder="Örn: 142" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="studentNameInput">Öğrenci Adı *</label>
+                        <input type="text" id="studentNameInput" class="form-input" style="width: 100%;" placeholder="Örn: Ahmet" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="studentSurnameInput">Öğrenci Soyadı</label>
+                        <input type="text" id="studentSurnameInput" class="form-input" style="width: 100%;" placeholder="Örn: Yılmaz">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-modal-close>İptal</button>
+                    <button type="submit" class="btn btn-primary">Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- TOPLU ÖĞRENCİ EKLEME MODALI (EXCEL & E-OKUL) -->
+    <div id="bulkStudentModal" class="modal-overlay">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-header">
+                <h3 class="modal-title">Toplu Öğrenci Ekle (Excel & e-Okul'dan Kopyala)</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="bulkStudentClassSelect">Öğrencilerin Ekleneceği Sınıf *</label>
+                    <select id="bulkStudentClassSelect" class="form-select" style="width: 100%;" required></select>
+                </div>
+                <div class="form-group">
+                    <label for="bulkStudentText">Öğrenci Listesi Metni *</label>
+                    <textarea id="bulkStudentText" class="form-textarea" style="width: 100%; font-family: 'JetBrains Mono', monospace;" rows="8" 
+                              placeholder="Excel veya e-Okul listesinden No, Ad, Soyad sütunlarını kopyalayıp buraya yapıştırın.&#10;&#10;Örnek Formatlar:&#10;101 Ahmet Yılmaz&#10;105  Ayşe  Demir&#10;112;Mehmet;Kaya"></textarea>
+                    <p class="form-help">
+                        💡 <strong>İpucu:</strong> Excel'den sütunları kopyalayıp doğrudan yapıştırabilirsiniz. Sistem Tab, Virgül veya Boşluk ayrımını otomatik tanır.
+                    </p>
+                </div>
+                <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="previewBulkStudents()">
+                        🔍 Önizleme Yap
+                    </button>
+                </div>
+                <div id="bulkPreviewContainer"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-modal-close>İptal</button>
+                <button type="button" class="btn btn-success" onclick="saveBulkStudents()">
+                    ✅ Öğrencileri Sınıfa Aktar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- UYGULAMA EKLE/DÜZENLE MODALI -->
+    <div id="assignmentModal" class="modal-overlay">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-header">
+                <h3 class="modal-title" id="assignmentModalTitle">Yeni Uygulama Görevi Ekle</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <form onsubmit="event.preventDefault(); saveAssignmentFromModal();">
+                <div class="modal-body">
+                    <input type="hidden" id="assignmentIdInput">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label for="assignmentModalCourseSelect">Hangi Derse Ait? *</label>
+                            <select id="assignmentModalCourseSelect" class="form-select" style="width: 100%;" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="assignmentModalClassSelect">Özel Sınıf (İsteğe Bağlı)</label>
+                            <select id="assignmentModalClassSelect" class="form-select" style="width: 100%;">
+                                <option value="">-- Tüm Sınıflara Açık --</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label for="assignmentTitleInput">Uygulama Adı / Konu *</label>
+                            <input type="text" id="assignmentTitleInput" class="form-input" style="width: 100%;" placeholder="Örn: Uygulama 1: HTML5 Form ve Tablo Tasarımı" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="assignmentDateInput">Tarih</label>
+                            <input type="date" id="assignmentDateInput" class="form-input" style="width: 100%;">
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 3fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label for="assignmentMaxScoreInput">Maks. Puan</label>
+                            <input type="number" id="assignmentMaxScoreInput" class="form-input" style="width: 100%; text-align: center; font-family: 'JetBrains Mono', monospace;" value="100" min="1" max="100">
+                        </div>
+                        <div class="form-group">
+                            <label for="assignmentCriteriaInput">Değerlendirme Kriterleri (Rubrik)</label>
+                            <input type="text" id="assignmentCriteriaInput" class="form-input" style="width: 100%;" placeholder="Örn: Form etiketleri: 30p | CSS Düzeni: 30p | Kod Düzeni: 40p">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="assignmentDescInput">Uygulama Açıklaması / Talimatlar</label>
+                        <textarea id="assignmentDescInput" class="form-textarea" style="width: 100%;" rows="3" placeholder="Laboratuvar görev talimatları..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-modal-close>İptal</button>
+                    <button type="submit" class="btn btn-primary">Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- SCRIPTLER -->
+    <script src="js/storage.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
