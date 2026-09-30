@@ -74,8 +74,8 @@
                     <p>
                         <span id="headerTeacherName">Bilişim Teknolojileri Alanı</span>
                         <span style="color: var(--border);">|</span>
-                        <span style="display: inline-flex; align-items: center; gap: 0.35rem; color: var(--success); font-weight: 700;">
-                            <span class="status-online-dot"></span> Çevrimdışı Güvenli Mod
+                        <span id="cloudStatusBadge" class="status-badge" style="background:#f1f5f9; color:var(--text-muted); border: 1px solid var(--border);">
+                            <span style="width:8px; height:8px; border-radius:50%; background:#94a3b8; display:inline-block;"></span> Çevrimdışı Mod
                         </span>
                     </p>
                 </div>
@@ -107,6 +107,10 @@
             <button class="nav-tab" data-view="view-matrix">
                 <span>📊 Not Çizelgesi & Raporlar</span>
             </button>
+            <button class="nav-tab" data-view="view-cleaning">
+                <span>🧹 Lab Temizlik</span>
+                <span class="tab-badge" id="badgeCleaningCount">0</span>
+            </button>
             <button class="nav-tab" data-view="view-courses">
                 <span>📚 Dersler</span>
                 <span class="tab-badge" id="badgeCourseCount">0</span>
@@ -124,7 +128,7 @@
                 <span class="tab-badge" id="badgeAssignmentCount">0</span>
             </button>
             <button class="nav-tab" data-view="view-settings">
-                <span>⚙️ Ayarlar & Şifre</span>
+                <span>⚙️ Ayarlar & Bulut</span>
             </button>
         </div>
     </nav>
@@ -139,7 +143,6 @@
         <!-- VIEW 1: HIZLI NOT GİRİŞİ                   -->
         <!-- ========================================== -->
         <section id="view-grading" class="view-section active">
-            <!-- Seçim ve İşlem Çubuğu -->
             <div class="action-bar no-print">
                 <div class="filter-group">
                     <div class="filter-item">
@@ -165,10 +168,8 @@
                 </div>
             </div>
 
-            <!-- İstatistik Kartları -->
             <div id="gradingStatsContainer"></div>
 
-            <!-- Not Giriş Tablosu -->
             <div class="card">
                 <div class="card-header no-print">
                     <div class="card-title-group">
@@ -222,7 +223,59 @@
 
 
         <!-- ========================================== -->
-        <!-- VIEW 3: DERSLER                            -->
+        <!-- VIEW 3: 🧹 LAB TEMİZLİK / NÖBET (YENİ!)   -->
+        <!-- ========================================== -->
+        <section id="view-cleaning" class="view-section">
+            <div class="action-bar no-print">
+                <div class="filter-group">
+                    <div class="filter-item">
+                        <label class="filter-label" for="cleaningClassSelect">Sınıf Seçin</label>
+                        <select id="cleaningClassSelect" class="form-select"></select>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 0.6rem;">
+                    <button class="btn btn-primary btn-sm" onclick="openCleaningModal()">
+                        ➕ Temizlik Kaydı Ekle
+                    </button>
+                    <button class="btn btn-secondary btn-sm" onclick="printCleaningRoster()">
+                        🖨️ Nöbet Çizelgesini Yazdır
+                    </button>
+                </div>
+            </div>
+
+            <!-- Sıradaki Nöbetçiler Öneri Kartı -->
+            <div id="dutyQueueContainer"></div>
+
+            <!-- Öğrenci Temizlik Durum Özeti & Sıra Takip Tablosu -->
+            <div class="card">
+                <div class="card-header no-print">
+                    <div class="card-title-group">
+                        <h2>Sınıf Temizlik Sırası ve Nöbetçi Takip Tablosu</h2>
+                        <p>Öğrencilerin temizlik sayıları ve en son ne zaman nöbetçi oldukları listelenir. Sırası gelen öğrencileri tek tıkla nöbetçi atayabilirsiniz.</p>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="cleaningStatsTableContainer"></div>
+                </div>
+            </div>
+
+            <!-- Geçmiş Temizlik Kayıtları Defteri -->
+            <div class="card">
+                <div class="card-header no-print">
+                    <div class="card-title-group">
+                        <h2>📋 Laboratuvar Temizlik Defteri (Geçmiş Kayıtlar)</h2>
+                        <p>Hangi tarihte hangi öğrencilerin temizlik yaptığı ve öğretmen notları.</p>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="cleaningHistoryTableContainer"></div>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ========================================== -->
+        <!-- VIEW 4: DERSLER                            -->
         <!-- ========================================== -->
         <section id="view-courses" class="view-section">
             <div class="action-bar">
@@ -240,7 +293,7 @@
 
 
         <!-- ========================================== -->
-        <!-- VIEW 4: SINIFLAR                           -->
+        <!-- VIEW 5: SINIFLAR                           -->
         <!-- ========================================== -->
         <section id="view-classes" class="view-section">
             <div class="action-bar">
@@ -258,7 +311,7 @@
 
 
         <!-- ========================================== -->
-        <!-- VIEW 5: ÖĞRENCİLER                         -->
+        <!-- VIEW 6: ÖĞRENCİLER                         -->
         <!-- ========================================== -->
         <section id="view-students" class="view-section">
             <div class="action-bar">
@@ -291,7 +344,7 @@
 
 
         <!-- ========================================== -->
-        <!-- VIEW 6: UYGULAMALAR / GÖREVLER             -->
+        <!-- VIEW 7: UYGULAMALAR / GÖREVLER             -->
         <!-- ========================================== -->
         <section id="view-assignments" class="view-section">
             <div class="action-bar">
@@ -311,9 +364,39 @@
 
 
         <!-- ========================================== -->
-        <!-- VIEW 7: AYARLAR VE ŞİFRE DEĞİŞTİRME        -->
+        <!-- VIEW 8: AYARLAR, ŞİFRE & FIREBASE BULUT    -->
         <!-- ========================================== -->
         <section id="view-settings" class="view-section">
+            <!-- ☁️ GOOGLE FIREBASE BULUT SENKRONİZASYONU -->
+            <div class="card" style="border: 2px solid #818cf8;">
+                <div class="card-header" style="background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);">
+                    <div class="card-title-group">
+                        <h2 style="color: #3730a3; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>☁️</span> Google Firebase Bulut Veritabanı Senkronizasyonu
+                        </h2>
+                        <p style="color: #4338ca;">
+                            Verilerinizin asla kaybolmaması, ev ve okul arasında otomatik senkronize olması için Firebase ayarlarınızı buraya girin.
+                        </p>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button type="button" class="btn btn-primary btn-sm" onclick="testFirebaseConfigInput()">
+                            ⚡ Bağlantıyı Test Et & Kaydet
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label for="firebaseConfigInput">Firebase Yapılandırması (firebaseConfig JSON)</label>
+                        <textarea id="firebaseConfigInput" class="firebase-config-box" rows="5" 
+                                  placeholder='{\n  "apiKey": "AIzaSy...",\n  "authDomain": "proje-adi.firebaseapp.com",\n  "projectId": "proje-adi",\n  "storageBucket": "proje-adi.appspot.com",\n  "messagingSenderId": "...",\n  "appId": "..."\n}'></textarea>
+                        <p class="form-help">
+                            💡 <strong>Nasıl Alınır?</strong> <a href="https://console.firebase.google.com" target="_blank" style="color: var(--primary); font-weight: bold; text-decoration: underline;">console.firebase.google.com</a> adresinden ücretsiz bir proje oluşturun ➔ Web Uygulaması (<code>&lt;/&gt;</code>) ekleyin ➔ Verilen <code>const firebaseConfig = { ... }</code> nesnesini kopyalayıp buraya yapıştırın.
+                        </p>
+                    </div>
+                    <div id="firebaseTestResult"></div>
+                </div>
+            </div>
+
             <!-- Giriş Bilgileri & Şifre Değiştirme -->
             <div class="card">
                 <div class="card-header">
@@ -367,6 +450,10 @@
                                 <input type="text" id="settingDepartment" class="form-input" style="width: 100%;" placeholder="Örn: Bilişim Teknolojileri Alanı">
                             </div>
                             <div class="form-group">
+                                <label for="settingLabName">Laboratuvar Adı</label>
+                                <input type="text" id="settingLabName" class="form-input" style="width: 100%;" placeholder="Örn: Bilişim Laboratuvarı 1">
+                            </div>
+                            <div class="form-group">
                                 <label for="settingAcademicYear">Eğitim Öğretim Yılı</label>
                                 <input type="text" id="settingAcademicYear" class="form-input" style="width: 100%;" placeholder="Örn: 2024 - 2025">
                             </div>
@@ -389,7 +476,7 @@
                         <div style="border: 1px solid var(--border); padding: 1.35rem; border-radius: var(--radius-md); background: #fafbfc;">
                             <h3 style="font-size: 0.98rem; font-weight: 800; margin-bottom: 0.35rem;">📦 Veritabanını İndir (Yedek Al)</h3>
                             <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1.15rem; line-height: 1.4;">
-                                Tüm dersleri, sınıfları, öğrencileri, uygulamaları ve verilen notları tek bir JSON dosyası olarak flash belleğinize kaydeder.
+                                Tüm dersleri, sınıfları, öğrencileri, uygulamaları, notları ve temizlik kayıtlarını tek bir JSON dosyası olarak kaydeder.
                             </p>
                             <button class="btn btn-secondary" onclick="exportDatabaseJSON()">
                                 📥 Yedek Dosyasını İndir (.json)
@@ -424,6 +511,34 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Google Firebase Bulut Senkronizasyonu (İsteğe Bağlı) -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title-group">
+                        <h2>☁️ Google Firebase Canlı Bulut Senkronizasyonu (İsteğe Bağlı)</h2>
+                        <p>Evdeki bilgisayarınız, telefonunuz ve okul laboratuvarı arasında verilerinizin eşzamanlı ve kayıpsız eşitlenmesini sağlar.</p>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1rem; line-height: 1.5;">
+                        Firebase Console üzerinden ücretsiz bir proje açıp aldığınız web yapılandırmasını (<code>firebaseConfig</code> nesnesini veya JSON kodunu) buraya yapıştırarak anında gerçek zamanlı bulut eşitlemeyi aktif edebilirsiniz. Yapılandırma girilmediğinde sistem güvenli yerel modda (LocalStorage) çalışmaya devam eder.
+                    </p>
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label for="firebaseConfigInput" style="font-weight: 700;">Firebase Proje Yapılandırması (JSON veya JS Nesnesi)</label>
+                        <textarea id="firebaseConfigInput" class="form-textarea" style="width: 100%; font-family: 'JetBrains Mono', monospace; font-size: 0.82rem;" rows="5" placeholder='{&#10;  "apiKey": "AIzaSy...",&#10;  "authDomain": "proje.firebaseapp.com",&#10;  "projectId": "proje-id",&#10;  "storageBucket": "proje.appspot.com",&#10;  "messagingSenderId": "...",&#10;  "appId": "..."&#10;}'></textarea>
+                    </div>
+                    <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                        <button type="button" class="btn btn-primary" onclick="testFirebaseConfigInput()">
+                            ⚡ Bağlantıyı Test Et ve Kaydet
+                        </button>
+                        <button type="button" class="btn btn-outline" onclick="removeFirebaseConfigPrompt()">
+                            🔌 Bağlantıyı Kaldır (Çevrimdışı Mod)
+                        </button>
+                    </div>
+                    <div id="firebaseTestResult" style="margin-top: 1rem;"></div>
+                </div>
+            </div>
         </section>
 
     </main>
@@ -432,6 +547,55 @@
     <!-- ========================================== -->
     <!-- 4. MODAL PENCERELER                        -->
     <!-- ========================================== -->
+
+    <!-- TEMİZLİK / NÖBET KAYDI EKLE/DÜZENLE MODALI (YENİ!) -->
+    <div id="cleaningModal" class="modal-overlay">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-header">
+                <h3 class="modal-title" id="cleaningModalTitle">Laboratuvar Temizlik / Nöbet Kaydı</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <form onsubmit="event.preventDefault(); saveCleaningFromModal();">
+                <div class="modal-body">
+                    <input type="hidden" id="cleaningIdInput">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label for="cleaningModalClassSelect">Sınıfı *</label>
+                            <select id="cleaningModalClassSelect" class="form-select" style="width: 100%;" required onchange="renderCleaningStudentSelection()"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="cleaningDateInput">Temizlik Tarihi *</label>
+                            <input type="date" id="cleaningDateInput" class="form-input" style="width: 100%;" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Nöbetçi / Temizlik Yapan Öğrenciler * (Birden Fazla Seçebilirsiniz)</label>
+                        <div id="cleaningStudentCheckboxesContainer" style="max-height: 220px; overflow-y: auto; border: 1.5px solid var(--border); border-radius: var(--radius-sm); padding: 0.75rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.5rem; background: #fafbfc;"></div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label for="cleaningStatusSelect">Durum</label>
+                            <select id="cleaningStatusSelect" class="form-select" style="width: 100%;">
+                                <option value="completed">✅ Temizliği Tamamladı</option>
+                                <option value="missed">❌ Yapmadı / Kaçtı</option>
+                                <option value="pending">⏳ Bekliyor / Nöbetçi Atandı</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="cleaningNoteInput">Öğretmen Açıklaması / Kontrol Notu</label>
+                            <input type="text" id="cleaningNoteInput" class="form-input" style="width: 100%;" placeholder="Örn: Masalar silindi, bilgisayarlar kapatıldı, yerler süpürüldü">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-modal-close>İptal</button>
+                    <button type="submit" class="btn btn-primary">Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <!-- DERS EKLE/DÜZENLE MODALI -->
     <div id="courseModal" class="modal-overlay">
@@ -621,6 +785,7 @@
 
     <!-- SCRIPTLER -->
     <script src="js/storage.js"></script>
+    <script src="js/firebase-config.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

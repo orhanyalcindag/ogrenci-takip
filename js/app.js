@@ -162,6 +162,9 @@ function switchView(viewId) {
     } else if (viewId === 'view-matrix') {
         populateMatrixSelectors();
         renderMatrixTable();
+    } else if (viewId === 'view-cleaning') {
+        populateCleaningSelectors();
+        renderCleaningView();
     } else if (viewId === 'view-courses') {
         renderCoursesView();
     } else if (viewId === 'view-classes') {
@@ -186,16 +189,19 @@ function updateTabBadges() {
     const classes = db.getClasses();
     const students = db.getStudents();
     const assignments = db.getAssignments();
+    const cleanings = db.getCleaningLogs();
 
     const courseBadge = document.getElementById('badgeCourseCount');
     const classBadge = document.getElementById('badgeClassCount');
     const studentBadge = document.getElementById('badgeStudentCount');
     const assignmentBadge = document.getElementById('badgeAssignmentCount');
+    const cleaningBadge = document.getElementById('badgeCleaningCount');
 
     if (courseBadge) courseBadge.textContent = courses.length;
     if (classBadge) classBadge.textContent = classes.length;
     if (studentBadge) studentBadge.textContent = students.length;
     if (assignmentBadge) assignmentBadge.textContent = assignments.length;
+    if (cleaningBadge) cleaningBadge.textContent = cleanings.length;
 }
 
 
@@ -888,6 +894,353 @@ function exportMatrixToCSV() {
 
 
 // ==========================================
+// 3. LABORATUVAR TEMİZLİK / NÖBET YÖNETİMİ
+// ==========================================
+
+function populateCleaningSelectors() {
+    const classSelect = document.getElementById('cleaningClassSelect');
+    if (!classSelect) return;
+
+    const classes = db.getClasses();
+    const currentClassId = classSelect.value || (classes[0] ? classes[0].id : '');
+
+    classSelect.innerHTML = classes.map(c => 
+        `<option value="${c.id}" ${c.id === currentClassId ? 'selected' : ''}>${escapeHtml(c.name)}</option>`
+    ).join('');
+}
+
+function renderCleaningView() {
+    const classSelect = document.getElementById('cleaningClassSelect');
+    const queueContainer = document.getElementById('dutyQueueContainer');
+    const statsContainer = document.getElementById('cleaningStatsTableContainer');
+    const historyContainer = document.getElementById('cleaningHistoryTableContainer');
+
+    if (!classSelect || !statsContainer || !historyContainer) return;
+
+    const classId = classSelect.value;
+    if (!classId) {
+        if (queueContainer) queueContainer.innerHTML = '';
+        statsContainer.innerHTML = '<div class="empty-state"><h3>Lütfen Bir Sınıf Seçin</h3></div>';
+        historyContainer.innerHTML = '';
+        return;
+    }
+
+    const cls = db.getClass(classId);
+    const students = db.getStudents(classId);
+
+    if (students.length === 0) {
+        if (queueContainer) queueContainer.innerHTML = '';
+        statsContainer.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">👥</div>
+                <h3>Bu Sınıfta Öğrenci Yok</h3>
+                <p>Temizlik nöbeti atayabilmek için önce sınıfa öğrenci eklemelisiniz.</p>
+                <button class="btn btn-primary" onclick="openBulkStudentModal('${classId}')">📋 Öğrenci Ekle</button>
+            </div>
+        `;
+        historyContainer.innerHTML = '';
+        return;
+    }
+
+    const stats = db.getStudentCleaningStats(classId);
+    const logs = db.getCleaningLogs(classId);
+
+    // 1. Sıradaki Nöbetçiler Öneri Kartı
+    if (queueContainer) {
+        const suggested = stats.slice(0, 2);
+        const suggestedPills = suggested.map(s => 
+            `<span class="duty-student-pill">
+                <span class="student-no-badge" style="font-size:0.75rem; padding:0.1rem 0.4rem;">${escapeHtml(s.student.number)}</span>
+                ${escapeHtml(s.student.name)} ${escapeHtml(s.student.surname)}
+                <span style="font-size:0.72rem; color:var(--text-muted); font-weight:normal;">(${s.count} kez yaptı)</span>
+            </span>`
+        ).join('');
+
+        queueContainer.innerHTML = `
+            <div class="duty-queue-card">
+                <div class="duty-queue-info">
+                    <div class="duty-queue-icon">🧹</div>
+                    <div>
+                        <div style="font-weight: 800; font-size: 1.05rem; color: #065f46;">
+                            Sıradaki Temizlik Nöbetçileri (Akıllı Sıra Önerisi)
+                        </div>
+                        <div style="font-size: 0.82rem; color: #047857; margin-bottom: 0.35rem;">
+                            Sistemde en az temizlik yapan veya sırası gelen öğrenciler otomatik belirlendi:
+                        </div>
+                        <div class="duty-queue-students">
+                            ${suggestedPills}
+                        </div>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 0.6rem; align-items: center;">
+                    <button class="btn btn-success btn-sm" onclick="quickMarkTodayCleaned('${classId}')" title="Bu öğrencileri bugünün temizlik nöbetçisi yap">
+                        ⚡ Bugün Nöbetçi Ata & Tamamla
+                    </button>
+                    <button class="btn btn-outline btn-sm" onclick="openCleaningModal(null, [${suggested.map(s => `'${s.student.id}'`).join(',')}])">
+                        📝 Özelleştirerek Kaydet
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    // 2. Öğrenci Temizlik Durum Özeti Tablosu
+    const statsRows = stats.map((item, index) => {
+        let badgeClass = 'cleaning-count-zero';
+        if (item.count >= 2) badgeClass = 'cleaning-count-good';
+        else if (item.count === 1) badgeClass = 'cleaning-count-low';
+
+        const isNextInQueue = index < 2;
+        const statusTag = isNextInQueue 
+            ? `<span class="status-badge" style="background:#fef3c7; color:#b45309; border:1px solid #fde68a;">⭐ Sıradaki (Öncelikli)</span>`
+            : `<span class="status-badge" style="background:#f1f5f9; color:var(--text-muted);">Sırada Bekliyor</span>`;
+
+        return `
+            <tr>
+                <td style="width: 45px; text-align: center;">${index + 1}</td>
+                <td style="width: 90px;"><span class="student-no-badge">${escapeHtml(item.student.number)}</span></td>
+                <td class="student-name-cell">${escapeHtml(item.student.name)} ${escapeHtml(item.student.surname)}</td>
+                <td style="text-align: center; width: 120px;">
+                    <span class="cleaning-count-badge ${badgeClass}">${item.count}</span>
+                </td>
+                <td style="width: 150px; color: ${item.lastDate ? 'var(--text-main)' : 'var(--text-light)'};">
+                    ${item.lastDate ? escapeHtml(item.lastDate) : 'Henüz Yapmadı'}
+                </td>
+                <td style="width: 160px;">${statusTag}</td>
+                <td style="text-align: right; width: 120px;">
+                    <button class="btn btn-outline btn-sm" onclick="openCleaningModal(null, ['${item.student.id}'])">
+                        ➕ Nöbet Yaz
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    statsContainer.innerHTML = `
+        <div class="grading-table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width: 45px; text-align: center;">Sıra</th>
+                        <th style="width: 90px;">No</th>
+                        <th>Öğrenci Adı Soyadı</th>
+                        <th style="text-align: center; width: 120px;">Temizlik Sayısı</th>
+                        <th style="width: 150px;">Son Temizlik Tarihi</th>
+                        <th style="width: 160px;">Nöbet Durumu</th>
+                        <th style="text-align: right; width: 120px;">İşlem</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${statsRows}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    // 3. Geçmiş Temizlik Defteri Tablosu
+    if (logs.length === 0) {
+        historyContainer.innerHTML = `
+            <div class="empty-state" style="padding: 2.5rem 1rem;">
+                <p>Henüz bu sınıfa ait temizlik kaydı bulunmuyor.</p>
+                <button class="btn btn-primary btn-sm" onclick="openCleaningModal()">➕ İlk Temizlik Kaydını Ekle</button>
+            </div>
+        `;
+    } else {
+        const historyRows = logs.map(log => {
+            const cleanerNames = (log.studentIds || []).map(id => {
+                const s = db.getStudent(id);
+                return s ? `<span class="student-no-badge" style="font-size:0.75rem; margin-right:4px;">${escapeHtml(s.number)}</span> ${escapeHtml(s.name)} ${escapeHtml(s.surname)}` : 'Öğrenci';
+            }).join(' &bull; ');
+
+            let statusBadge = '<span class="status-badge status-submitted">✅ Temizliği Tamamladı</span>';
+            if (log.status === 'missed') {
+                statusBadge = '<span class="status-badge status-absent">❌ Yapmadı / Kaçtı</span>';
+            } else if (log.status === 'pending') {
+                statusBadge = '<span class="status-badge status-pending">⏳ Nöbetçi Atandı</span>';
+            }
+
+            return `
+                <tr>
+                    <td style="width: 120px; font-weight: 700;">${escapeHtml(log.date || '')}</td>
+                    <td>${cleanerNames || '<span style="color:var(--text-light);">-</span>'}</td>
+                    <td style="width: 180px;">${statusBadge}</td>
+                    <td style="color: var(--text-muted); font-size: 0.85rem;">${escapeHtml(log.note || '-')}</td>
+                    <td style="text-align: right; width: 110px;">
+                        <button class="btn btn-secondary btn-sm" onclick="openCleaningModal('${log.id}')">✏️</button>
+                        <button class="btn btn-outline btn-sm" onclick="confirmDeleteCleaningLog('${log.id}')" style="color: var(--danger);">🗑️</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        historyContainer.innerHTML = `
+            <div class="grading-table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 120px;">Tarih</th>
+                            <th>Nöbetçi / Temizlik Yapan Öğrenciler</th>
+                            <th style="width: 180px;">Durum</th>
+                            <th>Öğretmen Açıklaması / Kontrol</th>
+                            <th style="text-align: right; width: 110px;">İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${historyRows}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    updateTabBadges();
+}
+
+function openCleaningModal(logId = null, preselectedStudentIds = []) {
+    const classSelect = document.getElementById('cleaningModalClassSelect');
+    const idInput = document.getElementById('cleaningIdInput');
+    const dateInput = document.getElementById('cleaningDateInput');
+    const statusSelect = document.getElementById('cleaningStatusSelect');
+    const noteInput = document.getElementById('cleaningNoteInput');
+
+    const classes = db.getClasses();
+    const currentClassId = document.getElementById('cleaningClassSelect') ? document.getElementById('cleaningClassSelect').value : (classes[0] ? classes[0].id : '');
+
+    classSelect.innerHTML = classes.map(c => 
+        `<option value="${c.id}" ${c.id === currentClassId ? 'selected' : ''}>${escapeHtml(c.name)}</option>`
+    ).join('');
+
+    let selectedIds = preselectedStudentIds || [];
+
+    if (logId) {
+        const log = db.getCleaningLog(logId);
+        if (log) {
+            document.getElementById('cleaningModalTitle').textContent = 'Temizlik Kaydını Düzenle';
+            idInput.value = log.id;
+            classSelect.value = log.classId;
+            dateInput.value = log.date || '';
+            statusSelect.value = log.status || 'completed';
+            noteInput.value = log.note || '';
+            selectedIds = log.studentIds || [];
+        }
+    } else {
+        document.getElementById('cleaningModalTitle').textContent = 'Yeni Laboratuvar Temizlik / Nöbet Kaydı';
+        idInput.value = '';
+        dateInput.value = new Date().toISOString().slice(0, 10);
+        statusSelect.value = 'completed';
+        noteInput.value = 'Laboratuvar masaları silindi, bilgisayarlar kapatıldı, yerler süpürüldü.';
+    }
+
+    renderCleaningStudentSelection(selectedIds);
+    openModal('cleaningModal');
+}
+
+function renderCleaningStudentSelection(selectedIds = []) {
+    const classId = document.getElementById('cleaningModalClassSelect').value;
+    const container = document.getElementById('cleaningStudentCheckboxesContainer');
+    if (!container || !classId) return;
+
+    const students = db.getStudents(classId);
+    if (students.length === 0) {
+        container.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem;">Bu sınıfta öğrenci yok.</div>';
+        return;
+    }
+
+    container.innerHTML = students.map(s => {
+        const isChecked = selectedIds.includes(s.id);
+        return `
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.88rem; cursor: pointer; padding: 0.35rem 0.5rem; border-radius: var(--radius-sm); background: white; border: 1px solid var(--border);">
+                <input type="checkbox" name="cleaningStudentCheck" value="${s.id}" ${isChecked ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: var(--primary);">
+                <span class="student-no-badge" style="font-size:0.75rem; padding:0.1rem 0.35rem;">${escapeHtml(s.number)}</span>
+                <span style="font-weight: 600;">${escapeHtml(s.name)} ${escapeHtml(s.surname)}</span>
+            </label>
+        `;
+    }).join('');
+}
+
+function saveCleaningFromModal() {
+    const id = document.getElementById('cleaningIdInput').value;
+    const classId = document.getElementById('cleaningModalClassSelect').value;
+    const date = document.getElementById('cleaningDateInput').value;
+    const status = document.getElementById('cleaningStatusSelect').value;
+    const note = document.getElementById('cleaningNoteInput').value.trim();
+
+    const checkedBoxes = Array.from(document.querySelectorAll('input[name="cleaningStudentCheck"]:checked'));
+    const studentIds = checkedBoxes.map(cb => cb.value);
+
+    if (!classId) {
+        showToast('Lütfen sınıf seçin!', 'warning');
+        return;
+    }
+    if (!date) {
+        showToast('Lütfen tarih seçin!', 'warning');
+        return;
+    }
+    if (studentIds.length === 0) {
+        showToast('Lütfen en az bir nöbetçi öğrenci seçin!', 'warning');
+        return;
+    }
+
+    db.saveCleaningLog({
+        id: id || undefined,
+        classId,
+        date,
+        studentIds,
+        status,
+        note
+    });
+
+    closeModal('cleaningModal');
+    renderCleaningView();
+    showToast('Temizlik kaydı başarıyla kaydedildi!', 'success');
+}
+
+function confirmDeleteCleaningLog(id) {
+    if (confirm('Bu temizlik kaydını silmek istediğinize emin misiniz?')) {
+        db.deleteCleaningLog(id);
+        renderCleaningView();
+        showToast('Temizlik kaydı silindi!', 'info');
+    }
+}
+
+function quickMarkTodayCleaned(classId) {
+    const stats = db.getStudentCleaningStats(classId);
+    const suggested = stats.slice(0, 2);
+
+    if (suggested.length === 0) {
+        showToast('Sınıfta öğrenci bulunamadı!', 'warning');
+        return;
+    }
+
+    const studentIds = suggested.map(s => s.student.id);
+    const today = new Date().toISOString().slice(0, 10);
+
+    db.saveCleaningLog({
+        classId,
+        date: today,
+        studentIds,
+        status: 'completed',
+        note: 'Günün nöbetçileri temizliği eksiksiz tamamladı.'
+    });
+
+    renderCleaningView();
+    showToast(`Bugünün temizliği kaydedildi (${suggested.map(s => s.student.name).join(' & ')})!`, 'success');
+}
+
+function printCleaningRoster() {
+    const classSelect = document.getElementById('cleaningClassSelect');
+    if (!classSelect) return;
+    const classId = classSelect.value;
+    const cls = db.getClass(classId);
+    const settings = db.getSettings();
+    const students = db.getStudents(classId);
+
+    // MEB Laboratuvar Panosu Çizelgesi Şablonunu Hazırla ve Yazdır
+    window.print();
+}
+
+
+// ==========================================
 // 4. DERS YÖNETİMİ (COURSES VIEW)
 // ==========================================
 
@@ -1568,19 +1921,87 @@ function renderSettingsView() {
     document.getElementById('settingTeacherName').value = settings.teacherName || '';
     document.getElementById('settingDepartment').value = settings.department || '';
     document.getElementById('settingAcademicYear').value = settings.academicYear || '';
+    const labNameEl = document.getElementById('settingLabName');
+    if (labNameEl) labNameEl.value = settings.labName || '';
+
+    const fbCfg = db.getFirebaseConfig();
+    const fbInput = document.getElementById('firebaseConfigInput');
+    if (fbInput) {
+        fbInput.value = fbCfg ? JSON.stringify(fbCfg, null, 2) : '';
+    }
 }
 
 function saveSettingsFromForm() {
+    const labNameEl = document.getElementById('settingLabName');
     const newSettings = {
         schoolName: document.getElementById('settingSchoolName').value.trim(),
         teacherName: document.getElementById('settingTeacherName').value.trim(),
         department: document.getElementById('settingDepartment').value.trim(),
-        academicYear: document.getElementById('settingAcademicYear').value.trim()
+        academicYear: document.getElementById('settingAcademicYear').value.trim(),
+        labName: labNameEl ? labNameEl.value.trim() : ''
     };
 
     db.updateSettings(newSettings);
     renderHeaderInfo();
     showToast('Okul ve öğretmen bilgileri güncellendi!', 'success');
+}
+
+async function testFirebaseConfigInput() {
+    const raw = document.getElementById('firebaseConfigInput').value.trim();
+    const resEl = document.getElementById('firebaseTestResult');
+    if (!raw) {
+        showToast('Lütfen yapılandırma JSON metnini girin!', 'warning');
+        return;
+    }
+
+    try {
+        let cfg;
+        if (raw.startsWith('{')) {
+            try {
+                cfg = JSON.parse(raw);
+            } catch (e) {
+                cfg = (new Function(`return ${raw}`))();
+            }
+        } else {
+            const match = raw.match(/\{[\s\S]*\}/);
+            if (match) {
+                cfg = (new Function(`return ${match[0]}`))();
+            } else {
+                throw new Error('Geçerli bir firebaseConfig nesnesi bulunamadı.');
+            }
+        }
+
+        resEl.innerHTML = '<div style="color:var(--primary); font-size:0.85rem; font-weight:600;">⏳ Firebase sunucularına bağlanılıyor...</div>';
+
+        if (typeof testFirebaseConnectionWithConfig === 'function') {
+            const testRes = await testFirebaseConnectionWithConfig(cfg);
+            if (testRes.success) {
+                db.saveFirebaseConfig(cfg);
+                resEl.innerHTML = '<div style="color:var(--success); font-size:0.85rem; font-weight:700;">✅ Bağlantı başarılı! Yapılandırma kaydedildi ve bulut senkronizasyonu başlatıldı.</div>';
+                if (typeof initFirebase === 'function') initFirebase();
+                showToast('Firebase başarıyla bağlandı!', 'success');
+            } else {
+                resEl.innerHTML = `<div style="color:var(--danger); font-size:0.85rem; font-weight:700;">❌ Bağlantı hatası: ${escapeHtml(testRes.error)}</div>`;
+            }
+        } else {
+            db.saveFirebaseConfig(cfg);
+            resEl.innerHTML = '<div style="color:var(--success); font-size:0.85rem; font-weight:700;">✅ Yapılandırma kaydedildi!</div>';
+            if (typeof initFirebase === 'function') initFirebase();
+            showToast('Yapılandırma kaydedildi!', 'success');
+        }
+    } catch (err) {
+        resEl.innerHTML = `<div style="color:var(--danger); font-size:0.85rem; font-weight:700;">❌ Hatalı biçim: ${escapeHtml(err.message)}</div>`;
+    }
+}
+
+function removeFirebaseConfigPrompt() {
+    if (confirm('Firebase bulut bağlantısını kaldırmak istediğinize emin misiniz? (Verileriniz yerel tarayıcınızda kalacaktır)')) {
+        db.saveFirebaseConfig(null);
+        document.getElementById('firebaseConfigInput').value = '';
+        document.getElementById('firebaseTestResult').innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem;">Bağlantı kaldırıldı. Çevrimdışı moddasınız.</div>';
+        if (typeof setCloudStatus === 'function') setCloudStatus(false, 'Çevrimdışı Mod');
+        showToast('Firebase bağlantısı kaldırıldı.', 'info');
+    }
 }
 
 function exportDatabaseJSON() {
@@ -1724,6 +2145,14 @@ function setupEventListeners() {
     if (assignmentCourseFilter) {
         assignmentCourseFilter.addEventListener('change', () => {
             renderAssignmentsView();
+        });
+    }
+
+    // Temizlik Sınıf Filtresi
+    const cleaningClassSelect = document.getElementById('cleaningClassSelect');
+    if (cleaningClassSelect) {
+        cleaningClassSelect.addEventListener('change', () => {
+            renderCleaningView();
         });
     }
 }

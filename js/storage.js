@@ -5,6 +5,7 @@
 
 const STORAGE_KEY = 'meslek_lise_not_sistemi_v2';
 const SESSION_KEY = 'meslek_lise_auth_session';
+const FIREBASE_CONFIG_KEY = 'meslek_lise_firebase_config';
 
 // Varsayılan Veri Yapısı
 const DEFAULT_DATA = {
@@ -16,13 +17,15 @@ const DEFAULT_DATA = {
         schoolName: 'Mesleki ve Teknik Anadolu Lisesi',
         teacherName: 'Orhan Hoca',
         academicYear: '2024 - 2025',
-        department: 'Bilişim Teknolojileri Alanı'
+        department: 'Bilişim Teknolojileri Alanı',
+        labName: 'Bilişim Laboratuvarı 1'
     },
-    courses: [],     // Dersler: [{ id, name, code, description, createdAt }]
-    classes: [],     // Sınıflar: [{ id, name, description, createdAt }]
-    students: [],    // Öğrenciler: [{ id, classId, number, name, surname, createdAt }]
-    assignments: [], // Uygulamalar: [{ id, courseId, classId, title, date, maxScore, criteria, description, createdAt }]
-    grades: {}       // Notlar: { [assignmentId_studentId]: { score, status, note, updatedAt } }
+    courses: [],      // Dersler: [{ id, name, code, description, createdAt }]
+    classes: [],      // Sınıflar: [{ id, name, description, createdAt }]
+    students: [],     // Öğrenciler: [{ id, classId, number, name, surname, createdAt }]
+    assignments: [],  // Uygulamalar: [{ id, courseId, classId, title, date, maxScore, criteria, description, createdAt }]
+    grades: {},       // Notlar: { [assignmentId_studentId]: { score, status, note, updatedAt } }
+    cleaningLogs: []  // Temizlik Nöbetleri: [{ id, classId, date, studentIds: [], status: 'completed'|'missed'|'pending', note: '', createdAt }]
 };
 
 class StorageService {
@@ -32,18 +35,7 @@ class StorageService {
 
     loadData() {
         try {
-            // Önce v2 anahtarını dene
             let raw = localStorage.getItem(STORAGE_KEY);
-            // Eğer v2 yoksa eski v1 verisini migrate et
-            if (!raw) {
-                const oldRaw = localStorage.getItem('meslek_lise_not_sistemi_v1');
-                if (oldRaw) {
-                    const oldData = JSON.parse(oldRaw);
-                    raw = JSON.stringify(this.migrateV1toV2(oldData));
-                    localStorage.setItem(STORAGE_KEY, raw);
-                }
-            }
-
             if (!raw) {
                 return JSON.parse(JSON.stringify(DEFAULT_DATA));
             }
@@ -56,7 +48,8 @@ class StorageService {
                 classes: parsed.classes || [],
                 students: parsed.students || [],
                 assignments: parsed.assignments || [],
-                grades: parsed.grades || {}
+                grades: parsed.grades || {},
+                cleaningLogs: parsed.cleaningLogs || []
             };
         } catch (e) {
             console.error('Veri yüklenirken hata oluştu:', e);
@@ -64,50 +57,13 @@ class StorageService {
         }
     }
 
-    migrateV1toV2(oldData) {
-        const newData = JSON.parse(JSON.stringify(DEFAULT_DATA));
-        if (oldData.settings) newData.settings = { ...newData.settings, ...oldData.settings };
-        if (oldData.classes) newData.classes = oldData.classes;
-        if (oldData.students) newData.students = oldData.students;
-        if (oldData.grades) newData.grades = oldData.grades;
-
-        // Eski sınıflardaki courseName'leri Derslere dönüştür
-        const courseMap = {};
-        if (oldData.classes) {
-            oldData.classes.forEach(c => {
-                const courseName = c.courseName || 'Genel Meslek Dersi';
-                if (!courseMap[courseName]) {
-                    const crsId = 'crs_' + Math.random().toString(36).substr(2, 6);
-                    courseMap[courseName] = crsId;
-                    newData.courses.push({
-                        id: crsId,
-                        name: courseName,
-                        code: courseName.substring(0, 4).toUpperCase(),
-                        description: 'Otomatik aktarılan ders'
-                    });
-                }
-            });
-        }
-
-        // Eski uygulamaları bu derslerle bağla
-        if (oldData.assignments) {
-            newData.assignments = oldData.assignments.map(a => {
-                const cls = newData.classes.find(c => c.id === a.classId);
-                const cName = cls ? (cls.courseName || 'Genel Meslek Dersi') : 'Genel Meslek Dersi';
-                const crsId = courseMap[cName] || (newData.courses[0] ? newData.courses[0].id : '');
-                return {
-                    ...a,
-                    courseId: crsId
-                };
-            });
-        }
-
-        return newData;
-    }
-
     saveData() {
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
+            // Eğer Firebase aktifse arka planda buluta senkronize et
+            if (typeof window.syncDataToFirebase === 'function') {
+                window.syncDataToFirebase(this.data);
+            }
             return true;
         } catch (e) {
             console.error('Veri kaydedilirken hata oluştu:', e);
@@ -118,9 +74,7 @@ class StorageService {
 
     // --- KİMLİK DOĞRULAMA (AUTH) ---
     authenticate(username, password) {
-        if (!this.data.auth) {
-            this.data.auth = { ...DEFAULT_DATA.auth };
-        }
+        if (!this.data.auth) this.data.auth = { ...DEFAULT_DATA.auth };
         const validUser = this.data.auth.username.trim().toLowerCase();
         const inputUser = (username || '').trim().toLowerCase();
         const validPass = this.data.auth.password.trim();
@@ -139,8 +93,7 @@ class StorageService {
 
     isLoggedIn() {
         try {
-            const session = sessionStorage.getItem(SESSION_KEY);
-            return !!session;
+            return !!sessionStorage.getItem(SESSION_KEY);
         } catch (e) {
             return false;
         }
@@ -173,7 +126,6 @@ class StorageService {
         }
         this.saveData();
 
-        // Oturumu da güncelle
         sessionStorage.setItem(SESSION_KEY, JSON.stringify({
             username: this.data.auth.username,
             loggedInAt: new Date().toISOString()
@@ -219,12 +171,11 @@ class StorageService {
 
     deleteCourse(id) {
         this.data.courses = (this.data.courses || []).filter(c => c.id !== id);
-        // Bu derse bağlı uygulamaları ve notları temizle
-        const assignmentIdsToRemove = this.data.assignments.filter(a => a.courseId === id).map(a => a.id);
-        this.data.assignments = this.data.assignments.filter(a => a.courseId !== id);
+        const assignmentIdsToRemove = (this.data.assignments || []).filter(a => a.courseId === id).map(a => a.id);
+        this.data.assignments = (this.data.assignments || []).filter(a => a.courseId !== id);
 
         const newGrades = {};
-        for (const [key, val] of Object.entries(this.data.grades)) {
+        for (const [key, val] of Object.entries(this.data.grades || {})) {
             const [aId] = key.split('_');
             if (!assignmentIdsToRemove.includes(aId)) {
                 newGrades[key] = val;
@@ -261,19 +212,15 @@ class StorageService {
 
     deleteClass(id) {
         this.data.classes = (this.data.classes || []).filter(c => c.id !== id);
-        // Bu sınıfa bağlı öğrencileri ve notlarını temizle
-        const studentIdsToRemove = this.data.students.filter(s => s.classId === id).map(s => s.id);
-        this.data.students = this.data.students.filter(s => s.classId !== id);
+        const studentIdsToRemove = (this.data.students || []).filter(s => s.classId === id).map(s => s.id);
+        this.data.students = (this.data.students || []).filter(s => s.classId !== id);
+        this.data.assignments = (this.data.assignments || []).filter(a => a.classId !== id);
+        this.data.cleaningLogs = (this.data.cleaningLogs || []).filter(l => l.classId !== id);
 
-        // Bu sınıfa özel uygulamaları temizle
-        const assignmentIdsToRemove = this.data.assignments.filter(a => a.classId === id).map(a => a.id);
-        this.data.assignments = this.data.assignments.filter(a => a.classId !== id);
-
-        // Notları temizle
         const newGrades = {};
-        for (const [key, val] of Object.entries(this.data.grades)) {
-            const [aId, sId] = key.split('_');
-            if (!studentIdsToRemove.includes(sId) && !assignmentIdsToRemove.includes(aId)) {
+        for (const [key, val] of Object.entries(this.data.grades || {})) {
+            const [, sId] = key.split('_');
+            if (!studentIdsToRemove.includes(sId)) {
                 newGrades[key] = val;
             }
         }
@@ -339,7 +286,7 @@ class StorageService {
     deleteStudent(id) {
         this.data.students = (this.data.students || []).filter(s => s.id !== id);
         const newGrades = {};
-        for (const [key, val] of Object.entries(this.data.grades)) {
+        for (const [key, val] of Object.entries(this.data.grades || {})) {
             const [, sId] = key.split('_');
             if (sId !== id) {
                 newGrades[key] = val;
@@ -384,7 +331,7 @@ class StorageService {
     deleteAssignment(id) {
         this.data.assignments = (this.data.assignments || []).filter(a => a.id !== id);
         const newGrades = {};
-        for (const [key, val] of Object.entries(this.data.grades)) {
+        for (const [key, val] of Object.entries(this.data.grades || {})) {
             const [aId] = key.split('_');
             if (aId !== id) {
                 newGrades[key] = val;
@@ -397,16 +344,14 @@ class StorageService {
     // --- NOTLANDIRMA (GRADES) ---
     getGrade(assignmentId, studentId) {
         const key = `${assignmentId}_${studentId}`;
-        return this.data.grades[key] || null;
+        return (this.data.grades || {})[key] || null;
     }
 
     saveGrade(assignmentId, studentId, gradeData) {
+        if (!this.data.grades) this.data.grades = {};
         const key = `${assignmentId}_${studentId}`;
-        if (!this.data.grades[key]) {
-            this.data.grades[key] = {};
-        }
         this.data.grades[key] = {
-            ...this.data.grades[key],
+            ...(this.data.grades[key] || {}),
             ...gradeData,
             updatedAt: new Date().toISOString()
         };
@@ -416,13 +361,116 @@ class StorageService {
 
     getGradesForAssignment(assignmentId) {
         const result = {};
-        for (const [key, val] of Object.entries(this.data.grades)) {
+        for (const [key, val] of Object.entries(this.data.grades || {})) {
             if (key.startsWith(assignmentId + '_')) {
                 const studentId = key.split('_')[1];
                 result[studentId] = val;
             }
         }
         return result;
+    }
+
+    // ==========================================
+    // 🧹 LABORATUVAR TEMİZLİK / NÖBET YÖNETİMİ
+    // ==========================================
+
+    getCleaningLogs(classId = null) {
+        let logs = this.data.cleaningLogs || [];
+        if (classId) {
+            logs = logs.filter(l => l.classId === classId);
+        }
+        return logs.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+    }
+
+    getCleaningLog(id) {
+        return (this.data.cleaningLogs || []).find(l => l.id === id);
+    }
+
+    saveCleaningLog(log) {
+        if (!this.data.cleaningLogs) this.data.cleaningLogs = [];
+        if (!log.id) {
+            log.id = 'cln_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+            log.createdAt = new Date().toISOString();
+            this.data.cleaningLogs.push(log);
+        } else {
+            const index = this.data.cleaningLogs.findIndex(l => l.id === log.id);
+            if (index !== -1) {
+                this.data.cleaningLogs[index] = { ...this.data.cleaningLogs[index], ...log, updatedAt: new Date().toISOString() };
+            }
+        }
+        this.saveData();
+        return log;
+    }
+
+    deleteCleaningLog(id) {
+        this.data.cleaningLogs = (this.data.cleaningLogs || []).filter(l => l.id !== id);
+        this.saveData();
+    }
+
+    /**
+     * Sınıftaki öğrencilerin temizlik istatistiklerini hesaplar:
+     * - Toplam kaç kez temizlik yaptı
+     * - En son ne zaman yaptı
+     * - Sıradaki temizlikçileri önerir (en az yapan veya en uzun süredir yapmayanlar)
+     */
+    getStudentCleaningStats(classId) {
+        const students = this.getStudents(classId);
+        const logs = this.getCleaningLogs(classId);
+
+        const stats = students.map(std => {
+            let count = 0;
+            let lastDate = null;
+            let missedCount = 0;
+
+            logs.forEach(log => {
+                if (log.studentIds && log.studentIds.includes(std.id)) {
+                    if (log.status === 'completed') {
+                        count++;
+                        if (!lastDate || new Date(log.date) > new Date(lastDate)) {
+                            lastDate = log.date;
+                        }
+                    } else if (log.status === 'missed') {
+                        missedCount++;
+                    }
+                }
+            });
+
+            return {
+                student: std,
+                count,
+                lastDate,
+                missedCount,
+                // Öncelik puanı: Temizlik sayısı az olan ve son tarihi eski olan en önceliklidir
+                priority: count * 1000 + (lastDate ? (new Date(lastDate).getTime() / 1000000000) : 0)
+            };
+        });
+
+        // Sıralama: En az temizlik yapandan en çok yapana doğru
+        stats.sort((a, b) => a.priority - b.priority || parseInt(a.student.number, 10) - parseInt(b.student.number, 10));
+        return stats;
+    }
+
+    // --- FIREBASE AYARLARI ---
+    getFirebaseConfig() {
+        try {
+            const raw = localStorage.getItem(FIREBASE_CONFIG_KEY);
+            return raw ? JSON.parse(raw) : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    saveFirebaseConfig(config) {
+        try {
+            if (!config) {
+                localStorage.removeItem(FIREBASE_CONFIG_KEY);
+            } else {
+                localStorage.setItem(FIREBASE_CONFIG_KEY, JSON.stringify(config));
+            }
+            return true;
+        } catch (e) {
+            return false;
+        }
     }
 
     // --- DIŞA / İÇE AKTARMA (BACKUP & RESTORE) ---
@@ -443,7 +491,8 @@ class StorageService {
                 classes: parsed.classes || [],
                 students: parsed.students || [],
                 assignments: parsed.assignments || [],
-                grades: parsed.grades || {}
+                grades: parsed.grades || {},
+                cleaningLogs: parsed.cleaningLogs || []
             };
             this.saveData();
             return true;
@@ -469,7 +518,8 @@ class StorageService {
                 schoolName: 'Atatürk Mesleki ve Teknik Anadolu Lisesi',
                 teacherName: 'Orhan Hoca',
                 academicYear: '2024 - 2025 Eğitim Öğretim Yılı',
-                department: 'Bilişim Teknolojileri Alanı'
+                department: 'Bilişim Teknolojileri Alanı',
+                labName: 'Bilişim Laboratuvarı 1'
             },
             courses: [
                 {
@@ -525,10 +575,8 @@ class StorageService {
                 { id: 'std_8', classId: 'cls_11a', number: '166', name: 'Elif', surname: 'Koç' },
                 { id: 'std_9', classId: 'cls_11a', number: '173', name: 'Can', surname: 'Yıldız' },
                 { id: 'std_10', classId: 'cls_11a', number: '180', name: 'Selin', surname: 'Arslan' },
-                // 11-B Öğrencileri
                 { id: 'std_30', classId: 'cls_11b', number: '301', name: 'Oğuzhan', surname: 'Polat' },
                 { id: 'std_31', classId: 'cls_11b', number: '305', name: 'Büşra', surname: 'Yavuz' },
-                // 10-A Öğrencileri
                 { id: 'std_20', classId: 'cls_10a', number: '201', name: 'Yusuf', surname: 'Korkmaz' },
                 { id: 'std_21', classId: 'cls_10a', number: '208', name: 'Merve', surname: 'Güneş' }
             ],
@@ -536,7 +584,7 @@ class StorageService {
                 {
                     id: 'asg_1',
                     courseId: 'crs_wtug',
-                    classId: '', // Tüm sınıflara açık veya ortak
+                    classId: '',
                     title: 'Uygulama 1: HTML5 Form ve Tablo Tasarımı',
                     date: '2024-10-15',
                     maxScore: 100,
@@ -552,26 +600,6 @@ class StorageService {
                     maxScore: 100,
                     description: 'Ürün kartları veya profil kartlarının Flexbox ile responsive olarak dizilmesi.',
                     criteria: 'Flex düzeni: 40p | Responsive uyum: 30p | Görsel tasarım: 30p'
-                },
-                {
-                    id: 'asg_3',
-                    courseId: 'crs_wtug',
-                    classId: '',
-                    title: 'Uygulama 3: JavaScript Dinamik Hesaplayıcı',
-                    date: '2024-11-05',
-                    maxScore: 100,
-                    description: 'Dört işlem yapabilen temel arayüzlü dinamik hesap makinesi.',
-                    criteria: 'Çalışma mantığı: 50p | Arayüz: 25p | Hata kontrolleri: 25p'
-                },
-                {
-                    id: 'asg_4',
-                    courseId: 'crs_prog',
-                    classId: 'cls_10a',
-                    title: 'Uygulama 1: Algoritma ve Akış Şeması',
-                    date: '2024-10-10',
-                    maxScore: 100,
-                    description: 'Klavyeden girilen sayının tek/çift olduğunu bulan algoritma ve akış diyagramı.',
-                    criteria: 'Algoritma mantığı: 50p | Akış şeması doğruluğu: 50p'
                 }
             ],
             grades: {
@@ -579,18 +607,26 @@ class StorageService {
                 'asg_1_std_2': { score: 100, status: 'submitted', note: 'Çok başarılı tasarım' },
                 'asg_1_std_3': { score: 70, status: 'submitted', note: 'Tablo çerçeveleri eksik' },
                 'asg_1_std_4': { score: 85, status: 'submitted', note: 'İyi' },
-                'asg_1_std_5': { score: 0, status: 'absent', note: 'Derse gelmedi' },
-                'asg_1_std_6': { score: 90, status: 'submitted', note: 'Başarılı' },
-                'asg_1_std_7': { score: 60, status: 'incomplete', note: 'Form butonları çalışmıyor' },
-                'asg_1_std_8': { score: 85, status: 'submitted', note: 'İyi' },
-                'asg_1_std_9': { score: 75, status: 'submitted', note: 'Validasyonlar eksik' },
-                'asg_1_std_10': { score: 90, status: 'submitted', note: 'Gayet güzel' },
-
-                'asg_2_std_1': { score: 90, status: 'submitted', note: 'Flexbox düzgün' },
-                'asg_2_std_2': { score: 95, status: 'submitted', note: 'Responsive harika' },
-                'asg_2_std_3': { score: 80, status: 'submitted', note: 'Mobilde taşma var' },
-                'asg_2_std_4': { score: 85, status: 'submitted', note: 'İyi' }
-            }
+                'asg_1_std_5': { score: 0, status: 'absent', note: 'Derse gelmedi' }
+            },
+            cleaningLogs: [
+                {
+                    id: 'cln_1',
+                    classId: 'cls_11a',
+                    date: '2024-10-14',
+                    studentIds: ['std_1', 'std_2'],
+                    status: 'completed',
+                    note: 'Klavye ve fareler silindi, bilgisayarlar kapatıldı.'
+                },
+                {
+                    id: 'cln_2',
+                    classId: 'cls_11a',
+                    date: '2024-10-21',
+                    studentIds: ['std_3', 'std_4'],
+                    status: 'completed',
+                    note: 'Masalar düzenlendi, çöpler boşaltıldı.'
+                }
+            ]
         };
 
         this.data = sample;
