@@ -64,23 +64,113 @@ function checkAuthStatus() {
     }
 }
 
+function switchAuthTab(tab) {
+    const loginForm = document.getElementById('loginForm');
+    const registerForm = document.getElementById('registerForm');
+    const tabBtnLogin = document.getElementById('tabBtnLogin');
+    const tabBtnRegister = document.getElementById('tabBtnRegister');
+    const titleEl = document.getElementById('loginTitle');
+
+    if (tab === 'register') {
+        if (loginForm) loginForm.style.display = 'none';
+        if (registerForm) registerForm.style.display = 'block';
+        if (tabBtnLogin) tabBtnLogin.classList.remove('active');
+        if (tabBtnRegister) tabBtnRegister.classList.add('active');
+        if (titleEl) titleEl.textContent = 'Yeni Öğretmen Kaydı';
+        const msgBox = document.getElementById('registerMsgBox');
+        if (msgBox) msgBox.style.display = 'none';
+    } else {
+        if (loginForm) loginForm.style.display = 'block';
+        if (registerForm) registerForm.style.display = 'none';
+        if (tabBtnLogin) tabBtnLogin.classList.add('active');
+        if (tabBtnRegister) tabBtnRegister.classList.remove('active');
+        if (titleEl) titleEl.textContent = 'Öğretmen Giriş Paneli';
+    }
+}
+
 function handleLoginSubmit() {
     const user = document.getElementById('loginUsername').value;
     const pass = document.getElementById('loginPassword').value;
     const errorEl = document.getElementById('loginErrorMsg');
 
-    if (db.authenticate(user, pass)) {
+    const authRes = db.authenticate(user, pass);
+
+    if (authRes.success) {
         if (errorEl) errorEl.style.display = 'none';
         document.getElementById('loginScreen').classList.add('hidden');
         renderHeaderInfo();
         renderAllViews();
-        showToast('Başarıyla giriş yapıldı. İyi dersler!', 'success');
+        showToast(`Hoş geldiniz, ${authRes.user.name}! İyi dersler.`, 'success');
     } else {
         if (errorEl) {
             errorEl.style.display = 'block';
-            errorEl.textContent = 'Kullanıcı adı veya şifre hatalı!';
+            errorEl.textContent = authRes.message || 'Kullanıcı adı veya şifre hatalı!';
         }
-        showToast('Giriş başarısız! Kullanıcı adı veya şifre hatalı.', 'error');
+        showToast(authRes.message || 'Giriş başarısız!', 'error');
+    }
+}
+
+function handleRegisterSubmit() {
+    const name = document.getElementById('regFullName').value.trim();
+    const department = document.getElementById('regDepartment').value.trim();
+    const username = document.getElementById('regUsername').value.trim();
+    const password = document.getElementById('regPassword').value;
+    const passwordConfirm = document.getElementById('regPasswordConfirm').value;
+    const activationCode = document.getElementById('regActivationCode').value.trim();
+    const msgBox = document.getElementById('registerMsgBox');
+
+    if (password !== passwordConfirm) {
+        msgBox.style.display = 'block';
+        msgBox.style.background = 'var(--danger-light)';
+        msgBox.style.color = 'var(--danger)';
+        msgBox.style.border = '1px solid var(--danger-border)';
+        msgBox.textContent = 'Şifreler birbiriyle uyuşmuyor!';
+        showToast('Şifreler uyuşmuyor!', 'warning');
+        return;
+    }
+
+    const regRes = db.registerTeacher({
+        name,
+        department,
+        username,
+        password,
+        activationCode
+    });
+
+    if (regRes.success) {
+        msgBox.style.display = 'block';
+        if (regRes.status === 'active') {
+            msgBox.style.background = 'var(--success-light)';
+            msgBox.style.color = 'var(--success)';
+            msgBox.style.border = '1px solid var(--success-border)';
+            msgBox.textContent = '✅ ' + regRes.message;
+            showToast('Hesabınız başarıyla aktifleştirildi!', 'success');
+            
+            // 1.5 saniye sonra giriş formuna aktar
+            setTimeout(() => {
+                switchAuthTab('login');
+                const userInp = document.getElementById('loginUsername');
+                const passInp = document.getElementById('loginPassword');
+                if (userInp) userInp.value = username;
+                if (passInp) {
+                    passInp.value = '';
+                    passInp.focus();
+                }
+            }, 1200);
+        } else {
+            msgBox.style.background = 'var(--warning-light, #fef3c7)';
+            msgBox.style.color = 'var(--warning-dark, #92400e)';
+            msgBox.style.border = '1px solid var(--warning-border, #fde68a)';
+            msgBox.textContent = '⏳ ' + regRes.message;
+            showToast('Kaydınız alındı, yönetici onayı bekleniyor.', 'info');
+        }
+    } else {
+        msgBox.style.display = 'block';
+        msgBox.style.background = 'var(--danger-light)';
+        msgBox.style.color = 'var(--danger)';
+        msgBox.style.border = '1px solid var(--danger-border)';
+        msgBox.textContent = '❌ ' + regRes.message;
+        showToast(regRes.message, 'error');
     }
 }
 
@@ -147,15 +237,29 @@ function renderHeaderInfo() {
     const avatarEl = document.getElementById('headerAvatar');
 
     if (schoolEl) schoolEl.textContent = settings.schoolName || 'Mesleki ve Teknik Anadolu Lisesi';
-    if (teacherEl) teacherEl.textContent = settings.teacherName ? `${settings.teacherName} - ${settings.department}` : (settings.department || 'Bilişim Teknolojileri');
-    
-    const displayUser = currentUser ? currentUser.username : (settings.teacherName || 'admin');
-    if (currentUserNameEl) currentUserNameEl.textContent = displayUser;
-    if (avatarEl) avatarEl.textContent = displayUser.charAt(0).toUpperCase();
+
+    const roleName = (currentUser && currentUser.role === 'admin') ? 'Yönetici / Alan Şefi' : 'Ders Öğretmeni';
+    const deptName = (currentUser && currentUser.department) || settings.department || 'Bilişim Teknolojileri Alanı';
+    if (teacherEl) {
+        teacherEl.textContent = `${deptName} • ${roleName}`;
+    }
+
+    const displayName = (currentUser && currentUser.name) ? currentUser.name : (settings.teacherName || 'admin');
+    const isAdmin = currentUser && currentUser.role === 'admin';
+
+    if (currentUserNameEl) {
+        currentUserNameEl.innerHTML = `
+            ${escapeHtml(displayName)}
+            <span class="user-badge-role ${isAdmin ? 'user-role-admin' : 'user-role-teacher'}">
+                ${isAdmin ? '👑 Alan Şefi' : '👨‍🏫 Öğretmen'}
+            </span>
+        `;
+    }
+    if (avatarEl) avatarEl.textContent = displayName.charAt(0).toUpperCase();
 
     // Ayarlar sekmesindeki kullanıcı adını doldur
     const settingUser = document.getElementById('settingUsername');
-    if (settingUser) settingUser.value = displayUser;
+    if (settingUser) settingUser.value = (currentUser && currentUser.username) ? currentUser.username : 'admin';
 }
 
 function setupNavigation() {
@@ -1952,6 +2056,146 @@ function renderSettingsView() {
     const fbInput = document.getElementById('firebaseConfigInput');
     if (fbInput) {
         fbInput.value = fbCfg ? JSON.stringify(fbCfg, null, 2) : '';
+    }
+
+    // Öğretmen Yönetimi ve Aktivasyon Kodu (Sadece Admin)
+    const teacherCard = document.getElementById('cardTeacherManagement');
+    const isAdmin = db.isAdmin();
+
+    if (teacherCard) {
+        if (isAdmin) {
+            teacherCard.style.display = 'block';
+            const codeInput = document.getElementById('settingActivationCodeInput');
+            if (codeInput) codeInput.value = db.getActivationCode();
+            renderTeachersManagementTable();
+        } else {
+            teacherCard.style.display = 'none';
+        }
+    }
+}
+
+function renderTeachersManagementTable() {
+    const tbody = document.getElementById('teachersTableBody');
+    if (!tbody) return;
+
+    const users = db.getUsers();
+    const currentUser = db.getCurrentUser();
+
+    if (users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">Kayıtlı öğretmen bulunamadı.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = users.map(u => {
+        let statusBadge = '<span class="user-status-badge user-status-active">✅ Aktif</span>';
+        if (u.status === 'pending') {
+            statusBadge = '<span class="user-status-badge user-status-pending">⏳ Onay Bekliyor</span>';
+        } else if (u.status === 'blocked') {
+            statusBadge = '<span class="user-status-badge user-status-blocked">🚫 Askıda</span>';
+        }
+
+        const roleBadge = `<span class="user-badge-role ${u.role === 'admin' ? 'user-role-admin' : 'user-role-teacher'}">${u.role === 'admin' ? 'Alan Şefi' : 'Öğretmen'}</span>`;
+        const isSelf = currentUser && (currentUser.userId === u.id || currentUser.username === u.username);
+        const isAdminUser = u.role === 'admin';
+
+        // İşlem Butonları
+        let actionButtons = '';
+        if (u.status === 'pending') {
+            actionButtons += `<button class="btn btn-success btn-sm" onclick="handleApproveTeacher('${u.id}')" title="Hesabı Onayla">✅ Onayla</button> `;
+        } else if (u.status === 'active' && !isAdminUser && !isSelf) {
+            actionButtons += `<button class="btn btn-outline btn-sm" onclick="handleToggleBlockTeacher('${u.id}', 'blocked')" title="Hesabı Askıya Al" style="color:var(--warning);">⏸️</button> `;
+        } else if (u.status === 'blocked') {
+            actionButtons += `<button class="btn btn-outline btn-sm" onclick="handleToggleBlockTeacher('${u.id}', 'active')" title="Hesabı Yeniden Aktifleştir" style="color:var(--success);">▶️</button> `;
+        }
+
+        actionButtons += `<button class="btn btn-secondary btn-sm" onclick="handleResetTeacherPassword('${u.id}')" title="Şifreyi Sıfırla">🔑</button> `;
+
+        if (!isAdminUser && !isSelf) {
+            actionButtons += `<button class="btn btn-outline btn-sm" onclick="handleDeleteTeacher('${u.id}')" title="Öğretmeni Sil" style="color:var(--danger);">🗑️</button>`;
+        }
+
+        const dateStr = u.createdAt ? new Date(u.createdAt).toLocaleDateString('tr-TR') : '-';
+
+        return `
+            <tr>
+                <td style="font-weight: 700;">
+                    ${escapeHtml(u.name)} ${isSelf ? '<span style="font-size:0.75rem; color:var(--primary); font-weight:normal;">(Siz)</span>' : ''}
+                </td>
+                <td style="font-family: 'JetBrains Mono', monospace; font-size:0.85rem;">${escapeHtml(u.username)}</td>
+                <td style="color:var(--text-muted); font-size:0.85rem;">${escapeHtml(u.department || 'Bilişim')}</td>
+                <td>${roleBadge}</td>
+                <td>${statusBadge}</td>
+                <td style="font-size:0.82rem; color:var(--text-muted);">${dateStr}</td>
+                <td style="text-align: right; white-space: nowrap;">${actionButtons}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function handleSaveActivationCode() {
+    const input = document.getElementById('settingActivationCodeInput');
+    if (!input) return;
+    const newCode = input.value.trim().toUpperCase();
+    if (!newCode) {
+        showToast('Aktivasyon kodu boş olamaz!', 'warning');
+        return;
+    }
+
+    db.setActivationCode(newCode);
+    input.value = newCode;
+    showToast(`Okul aktivasyon kodu güncellendi: ${newCode}`, 'success');
+}
+
+function handleGenerateRandomCode() {
+    const randomDigits = Math.floor(1000 + Math.random() * 9000);
+    const generated = `BILISIM-${randomDigits}`;
+    const input = document.getElementById('settingActivationCodeInput');
+    if (input) input.value = generated;
+    db.setActivationCode(generated);
+    showToast(`Yeni aktivasyon kodu üretildi ve kaydedildi: ${generated}`, 'success');
+}
+
+function handleApproveTeacher(userId) {
+    const user = db.getUser(userId);
+    if (!user) return;
+    if (confirm(`"${user.name}" öğretmeninin hesabını onaylayıp aktifleştirmek istiyor musunuz?`)) {
+        db.updateUserStatus(userId, 'active');
+        renderTeachersManagementTable();
+        showToast(`"${user.name}" hesabı aktifleştirildi!`, 'success');
+    }
+}
+
+function handleToggleBlockTeacher(userId, newStatus) {
+    const user = db.getUser(userId);
+    if (!user) return;
+    const actionText = newStatus === 'blocked' ? 'askıya almak' : 'aktifleştirmek';
+    if (confirm(`"${user.name}" öğretmeninin hesabını ${actionText} istediğinize emin misiniz?`)) {
+        db.updateUserStatus(userId, newStatus);
+        renderTeachersManagementTable();
+        showToast(`Kullanıcı durumu güncellendi.`, 'info');
+    }
+}
+
+function handleResetTeacherPassword(userId) {
+    const user = db.getUser(userId);
+    if (!user) return;
+    const newPass = prompt(`"${user.name}" (${user.username}) için yeni şifre belirleyin:`, '1234');
+    if (newPass === null) return;
+    if (newPass.trim().length < 4) {
+        showToast('Şifre en az 4 karakter olmalıdır!', 'warning');
+        return;
+    }
+    db.resetUserPassword(userId, newPass.trim());
+    showToast(`"${user.name}" şifresi başarıyla "${newPass.trim()}" olarak güncellendi!`, 'success');
+}
+
+function handleDeleteTeacher(userId) {
+    const user = db.getUser(userId);
+    if (!user) return;
+    if (confirm(`"${user.name}" (${user.username}) öğretmen hesabını silmek istediğinize emin misiniz?`)) {
+        db.deleteUser(userId);
+        renderTeachersManagementTable();
+        showToast('Öğretmen hesabı silindi.', 'info');
     }
 }
 

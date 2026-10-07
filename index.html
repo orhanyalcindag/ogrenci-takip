@@ -22,10 +22,21 @@
         <div class="login-card">
             <div class="login-header">
                 <div class="login-logo">💻</div>
-                <h2>Öğretmen Giriş Paneli</h2>
+                <h2 id="loginTitle">Öğretmen Giriş Paneli</h2>
                 <p id="loginSubtitle">Mesleki ve Teknik Anadolu Lisesi<br>Laboratuvar Uygulama & Not Takip Sistemi</p>
             </div>
 
+            <!-- Giriş / Kayıt Sekme Seçici -->
+            <div class="auth-tab-switcher">
+                <button type="button" class="auth-tab-btn active" id="tabBtnLogin" onclick="switchAuthTab('login')">
+                    🔑 Giriş Yap
+                </button>
+                <button type="button" class="auth-tab-btn" id="tabBtnRegister" onclick="switchAuthTab('register')">
+                    📝 Yeni Öğretmen Kaydı
+                </button>
+            </div>
+
+            <!-- 1. GİRİŞ FORMU -->
             <form id="loginForm" class="login-form" onsubmit="event.preventDefault(); handleLoginSubmit();">
                 <div class="login-field">
                     <label for="loginUsername">Kullanıcı Adı</label>
@@ -44,7 +55,7 @@
                     </div>
                 </div>
 
-                <div id="loginErrorMsg" style="display: none; color: var(--danger); font-size: 0.82rem; font-weight: 700; text-align: center; background: var(--danger-light); padding: 0.65rem; border-radius: var(--radius-sm); border: 1px solid var(--danger-border);">
+                <div id="loginErrorMsg" style="display: none; color: var(--danger); font-size: 0.82rem; font-weight: 700; text-align: center; background: var(--danger-light); padding: 0.65rem; border-radius: var(--radius-sm); border: 1px solid var(--danger-border); margin-bottom: 0.5rem;">
                     Kullanıcı adı veya şifre hatalı!
                 </div>
 
@@ -52,12 +63,77 @@
                     <span>Sisteme Giriş Yap</span>
                     <span>➔</span>
                 </button>
+
+                <div class="login-hint-badge" style="margin-top: 1rem;">
+                    <span>💡 Varsayılan: <strong>admin</strong> / <strong>1234</strong></span>
+                    <button type="button" onclick="fillDefaultLogin()">Hızlı Doldur</button>
+                </div>
             </form>
 
-            <div class="login-hint-badge">
-                <span>💡 Varsayılan: <strong>admin</strong> / <strong>1234</strong></span>
-                <button type="button" onclick="fillDefaultLogin()">Hızlı Doldur</button>
-            </div>
+            <!-- 2. AKTİVASYONLU ÖĞRETMEN KAYIT FORMU -->
+            <form id="registerForm" class="login-form" style="display: none;" onsubmit="event.preventDefault(); handleRegisterSubmit();">
+                <div class="login-field">
+                    <label for="regFullName">Adınız ve Soyadınız</label>
+                    <div class="login-input-wrap">
+                        <span class="login-input-icon">👤</span>
+                        <input type="text" id="regFullName" class="login-input" placeholder="Örn: Ayşe DEMİR" required>
+                    </div>
+                </div>
+
+                <div class="login-field">
+                    <label for="regDepartment">Alan / Branş</label>
+                    <div class="login-input-wrap">
+                        <span class="login-input-icon">🏫</span>
+                        <input type="text" id="regDepartment" class="login-input" placeholder="Örn: Bilişim Teknolojileri" value="Bilişim Teknolojileri Alanı" required>
+                    </div>
+                </div>
+
+                <div class="login-field">
+                    <label for="regUsername">Kullanıcı Adı (Giriş İçin)</label>
+                    <div class="login-input-wrap">
+                        <span class="login-input-icon">🏷️</span>
+                        <input type="text" id="regUsername" class="login-input" placeholder="Kullanıcı adınızı belirleyin" autocomplete="username" required>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                    <div class="login-field">
+                        <label for="regPassword">Şifre</label>
+                        <div class="login-input-wrap">
+                            <span class="login-input-icon">🔒</span>
+                            <input type="password" id="regPassword" class="login-input" placeholder="En az 4 karakter" required>
+                        </div>
+                    </div>
+                    <div class="login-field">
+                        <label for="regPasswordConfirm">Şifre Tekrar</label>
+                        <div class="login-input-wrap">
+                            <span class="login-input-icon">🔒</span>
+                            <input type="password" id="regPasswordConfirm" class="login-input" placeholder="Şifrenizi onaylayın" required>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="login-field">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <label for="regActivationCode">Okul Aktivasyon Kodu</label>
+                        <span style="font-size: 0.72rem; color: var(--primary); font-weight: 700;">Hızlı Onay İçin</span>
+                    </div>
+                    <div class="login-input-wrap">
+                        <span class="login-input-icon">🔑</span>
+                        <input type="text" id="regActivationCode" class="login-input" placeholder="Örn: BILISIM-2025" style="text-transform: uppercase;">
+                    </div>
+                    <span style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-top: 0.25rem; line-height: 1.35;">
+                        💡 Kodu biliyorsanız hesabınız anında açılır. Kodunuz yoksa kaydınız yönetici (Alan Şefi) onayına gider.
+                    </span>
+                </div>
+
+                <div id="registerMsgBox" style="display: none; font-size: 0.82rem; font-weight: 600; padding: 0.65rem; border-radius: var(--radius-sm); margin-bottom: 0.75rem; text-align: center;"></div>
+
+                <button type="submit" class="login-btn">
+                    <span>Öğretmen Hesabı Oluştur</span>
+                    <span>➔</span>
+                </button>
+            </form>
         </div>
     </div>
 
@@ -405,6 +481,54 @@
                         </p>
                     </div>
                     <div id="firebaseTestResult"></div>
+                </div>
+            </div>
+
+            <!-- Öğretmen Hesapları ve Aktivasyon Yönetimi (Yönetici / Admin) -->
+            <div class="card" id="cardTeacherManagement">
+                <div class="card-header">
+                    <div class="card-title-group">
+                        <h2>👥 Öğretmenler ve Aktivasyon Yönetimi</h2>
+                        <p>Zümre öğretmenlerinizin hesaplarını onaylayın, şifrelerini yönetin ve okul kayıt aktivasyon kodunu belirleyin.</p>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Okul Aktivasyon Kodu Kutusu -->
+                    <div style="background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: var(--radius-md); padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+                        <div>
+                            <div style="font-weight: 800; font-size: 0.95rem; color: var(--text); display: flex; align-items: center; gap: 0.4rem;">
+                                <span>🔑</span> Okul Kayıt Aktivasyon Kodu
+                            </div>
+                            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">
+                                Bu kodu bilen öğretmenler sisteme kaydolduklarında hesapları otomatik olarak anında aktifleştirilir.
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                            <input type="text" id="settingActivationCodeInput" class="form-input" style="width: 170px; font-weight: 800; letter-spacing: 0.05em; text-align: center; text-transform: uppercase;" placeholder="KOD">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="handleGenerateRandomCode()" title="Rastgele Kod Üret">🎲 Üret</button>
+                            <button type="button" class="btn btn-primary btn-sm" onclick="handleSaveActivationCode()">💾 Kodu Kaydet</button>
+                        </div>
+                    </div>
+
+                    <!-- Öğretmenler Tablosu -->
+                    <div class="grading-table-wrapper">
+                        <table class="data-table" id="teachersTable">
+                            <thead>
+                                <tr>
+                                    <th>Öğretmen Adı Soyadı</th>
+                                    <th>Kullanıcı Adı</th>
+                                    <th>Alan / Branş</th>
+                                    <th>Yetki</th>
+                                    <th>Durum</th>
+                                    <th>Kayıt Tarihi</th>
+                                    <th style="text-align: right; width: 190px;">İşlemler</th>
+                                </tr>
+                            </thead>
+                            <tbody id="teachersTableBody">
+                                <!-- Dinamik olarak renderTeachersManagementTable() ile doldurulur -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 

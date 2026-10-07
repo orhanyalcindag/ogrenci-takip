@@ -13,12 +13,26 @@ const DEFAULT_DATA = {
         username: 'admin',
         password: '1234'
     },
+    users: [
+        {
+            id: 'usr_admin',
+            username: 'admin',
+            password: '1234',
+            name: 'Orhan Hoca',
+            department: 'Bilişim Teknolojileri Alanı',
+            role: 'admin',
+            status: 'active',
+            createdAt: new Date().toISOString(),
+            activatedAt: new Date().toISOString()
+        }
+    ],
     settings: {
         schoolName: 'Mesleki ve Teknik Anadolu Lisesi',
         teacherName: 'Orhan Hoca',
         academicYear: '2024 - 2025',
         department: 'Bilişim Teknolojileri Alanı',
-        labName: 'Bilişim Laboratuvarı 1'
+        labName: 'Bilişim Laboratuvarı 1',
+        activationCode: 'BILISIM-2025' // Öğretmen kayıt aktivasyon kodu
     },
     courses: [],      // Dersler: [{ id, name, code, description, createdAt }]
     classes: [],      // Sınıflar: [{ id, name, description, createdAt }]
@@ -41,9 +55,41 @@ class StorageService {
             }
 
             const parsed = JSON.parse(raw);
+
+            // Çok kullanıcılı sisteme geçiş (Migrasyon)
+            let users = parsed.users;
+            if (!Array.isArray(users) || users.length === 0) {
+                const adminUser = (parsed.auth && parsed.auth.username) || 'admin';
+                const adminPass = (parsed.auth && parsed.auth.password) || '1234';
+                const teacherName = (parsed.settings && parsed.settings.teacherName) || 'Orhan Hoca';
+                const department = (parsed.settings && parsed.settings.department) || 'Bilişim Teknolojileri Alanı';
+                users = [
+                    {
+                        id: 'usr_admin',
+                        username: adminUser,
+                        password: adminPass,
+                        name: teacherName,
+                        department: department,
+                        role: 'admin',
+                        status: 'active',
+                        createdAt: new Date().toISOString(),
+                        activatedAt: new Date().toISOString()
+                    }
+                ];
+            }
+
+            const settings = {
+                ...DEFAULT_DATA.settings,
+                ...(parsed.settings || {})
+            };
+            if (!settings.activationCode) {
+                settings.activationCode = 'BILISIM-2025';
+            }
+
             return {
                 auth: { ...DEFAULT_DATA.auth, ...(parsed.auth || {}) },
-                settings: { ...DEFAULT_DATA.settings, ...(parsed.settings || {}) },
+                users: users,
+                settings: settings,
                 courses: parsed.courses || [],
                 classes: parsed.classes || [],
                 students: parsed.students || [],
@@ -72,23 +118,156 @@ class StorageService {
         }
     }
 
-    // --- KİMLİK DOĞRULAMA (AUTH) ---
-    authenticate(username, password) {
-        if (!this.data.auth) this.data.auth = { ...DEFAULT_DATA.auth };
-        const validUser = this.data.auth.username.trim().toLowerCase();
-        const inputUser = (username || '').trim().toLowerCase();
-        const validPass = this.data.auth.password.trim();
-        const inputPass = (password || '').trim();
+    // --- KULLANICI & KİMLİK DOĞRULAMA (AUTH) ---
+    getUsers() {
+        return this.data.users || [];
+    }
 
-        if (inputUser === validUser && inputPass === validPass) {
-            const session = {
-                username: this.data.auth.username,
-                loggedInAt: new Date().toISOString()
-            };
-            sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
-            return true;
+    getUser(id) {
+        return (this.data.users || []).find(u => u.id === id) || null;
+    }
+
+    getUserByUsername(username) {
+        if (!username) return null;
+        const target = username.trim().toLowerCase();
+        return (this.data.users || []).find(u => u.username.toLowerCase() === target) || null;
+    }
+
+    getActivationCode() {
+        return (this.data.settings && this.data.settings.activationCode) ? this.data.settings.activationCode : 'BILISIM-2025';
+    }
+
+    setActivationCode(code) {
+        if (!this.data.settings) this.data.settings = { ...DEFAULT_DATA.settings };
+        this.data.settings.activationCode = (code || '').trim().toUpperCase();
+        this.saveData();
+    }
+
+    /**
+     * Yeni Öğretmen Kaydı (Aktivasyonlu)
+     */
+    registerTeacher({ name, department, username, password, activationCode }) {
+        if (!name || !username || !password) {
+            return { success: false, message: 'Lütfen tüm zorunlu alanları doldurun!' };
         }
-        return false;
+
+        const cleanUsername = username.trim().toLowerCase();
+        if (cleanUsername.length < 3) {
+            return { success: false, message: 'Kullanıcı adı en az 3 karakter olmalıdır!' };
+        }
+
+        if (password.length < 4) {
+            return { success: false, message: 'Şifre en az 4 karakter olmalıdır!' };
+        }
+
+        // Kullanıcı adı benzersizlik kontrolü
+        if (this.getUserByUsername(cleanUsername)) {
+            return { success: false, message: 'Bu kullanıcı adı zaten kullanılmaktadır!' };
+        }
+
+        // Aktivasyon kodu doğrulama
+        const currentCode = this.getActivationCode().trim().toUpperCase();
+        const inputCode = (activationCode || '').trim().toUpperCase();
+        const isCodeValid = inputCode.length > 0 && inputCode === currentCode;
+
+        const newUser = {
+            id: 'usr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+            username: cleanUsername,
+            password: password.trim(),
+            name: name.trim(),
+            department: (department || 'Bilişim Teknolojileri').trim(),
+            role: 'teacher',
+            status: isCodeValid ? 'active' : 'pending',
+            createdAt: new Date().toISOString(),
+            activatedAt: isCodeValid ? new Date().toISOString() : null
+        };
+
+        if (!this.data.users) this.data.users = [];
+        this.data.users.push(newUser);
+        this.saveData();
+
+        if (isCodeValid) {
+            return {
+                success: true,
+                status: 'active',
+                message: 'Aktivasyon kodunuz doğrulandı! Hesabınız başarıyla oluşturuldu ve aktifleştirildi. Şimdi giriş yapabilirsiniz.'
+            };
+        } else {
+            return {
+                success: true,
+                status: 'pending',
+                message: 'Öğretmen kaydınız oluşturuldu! Kod girilmediği veya hatalı olduğu için hesabınız "Onay Bekliyor" durumundadır. Alan Şefi / Admin onayından sonra sisteme giriş yapabilirsiniz.'
+            };
+        }
+    }
+
+    authenticate(username, password) {
+        if (!username || !password) {
+            return { success: false, reason: 'invalid', message: 'Kullanıcı adı ve şifre zorunludur!' };
+        }
+
+        const inputUser = username.trim().toLowerCase();
+        const inputPass = password.trim();
+
+        const user = this.getUserByUsername(inputUser);
+
+        if (!user || user.password !== inputPass) {
+            // Eski 'auth' fallback kontrolü
+            if (this.data.auth && this.data.auth.username.toLowerCase() === inputUser && this.data.auth.password === inputPass) {
+                const adminUser = this.data.users.find(u => u.role === 'admin') || {
+                    id: 'usr_admin',
+                    username: inputUser,
+                    name: 'Orhan Hoca',
+                    role: 'admin',
+                    department: 'Bilişim Teknolojileri'
+                };
+                sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+                    userId: adminUser.id,
+                    username: adminUser.username,
+                    name: adminUser.name,
+                    role: 'admin',
+                    department: adminUser.department || 'Bilişim Teknolojileri',
+                    loggedInAt: new Date().toISOString()
+                }));
+                return { success: true, user: adminUser };
+            }
+            return { success: false, reason: 'invalid', message: 'Kullanıcı adı veya şifre hatalı!' };
+        }
+
+        // Hesap Durumu Kontrolleri
+        if (user.status === 'pending') {
+            return {
+                success: false,
+                reason: 'pending',
+                message: 'Hesabınız henüz onaylanmamıştır! Lütfen okul Alan Şefi / Yöneticinizin hesabınızı aktifleştirmesini bekleyin.'
+            };
+        }
+
+        if (user.status === 'blocked') {
+            return {
+                success: false,
+                reason: 'blocked',
+                message: 'Hesabınız askıya alınmıştır! Lütfen okul yöneticisiyle iletişime geçin.'
+            };
+        }
+
+        // Başarılı Giriş -> Oturum Aç
+        const session = {
+            userId: user.id,
+            username: user.username,
+            name: user.name,
+            role: user.role,
+            department: user.department,
+            loggedInAt: new Date().toISOString()
+        };
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+
+        // Eğer admin ise legacy auth nesnesini de senkronize tut
+        if (user.role === 'admin') {
+            this.data.auth = { username: user.username, password: user.password };
+        }
+
+        return { success: true, user };
     }
 
     isLoggedIn() {
@@ -101,11 +280,73 @@ class StorageService {
 
     getCurrentUser() {
         try {
-            const session = sessionStorage.getItem(SESSION_KEY);
-            return session ? JSON.parse(session) : null;
+            const raw = sessionStorage.getItem(SESSION_KEY);
+            if (!raw) return null;
+            const session = JSON.parse(raw);
+            // Güncel canlı kullanıcı kaydını bul
+            const liveUser = this.getUser(session.userId) || this.getUserByUsername(session.username);
+            if (liveUser) {
+                return {
+                    userId: liveUser.id,
+                    username: liveUser.username,
+                    name: liveUser.name,
+                    role: liveUser.role,
+                    department: liveUser.department,
+                    status: liveUser.status,
+                    loggedInAt: session.loggedInAt
+                };
+            }
+            return session;
         } catch (e) {
             return null;
         }
+    }
+
+    isAdmin() {
+        const u = this.getCurrentUser();
+        return u && (u.role === 'admin' || u.username === 'admin');
+    }
+
+    updateUserStatus(userId, status) {
+        const user = this.getUser(userId);
+        if (!user) return false;
+        if (user.username === 'admin' && status !== 'active') {
+            alert('Ana yönetici (admin) hesabı askıya alınamaz veya pasife çekilemez!');
+            return false;
+        }
+
+        user.status = status;
+        if (status === 'active') {
+            user.activatedAt = new Date().toISOString();
+        }
+        this.saveData();
+        return true;
+    }
+
+    resetUserPassword(userId, newPassword) {
+        const user = this.getUser(userId);
+        if (!user) return false;
+        user.password = newPassword.trim();
+        this.saveData();
+        return true;
+    }
+
+    deleteUser(userId) {
+        const user = this.getUser(userId);
+        if (!user) return false;
+        if (user.username === 'admin' || user.id === 'usr_admin') {
+            alert('Ana yönetici hesabı silinemez!');
+            return false;
+        }
+        const current = this.getCurrentUser();
+        if (current && current.userId === userId) {
+            alert('Şu an oturum açık olan kendi hesabınızı silemezsiniz!');
+            return false;
+        }
+
+        this.data.users = (this.data.users || []).filter(u => u.id !== userId);
+        this.saveData();
+        return true;
     }
 
     logout() {
@@ -113,25 +354,46 @@ class StorageService {
     }
 
     changePassword(currentPass, newPass, newUsername = null) {
-        if (this.data.auth.password !== currentPass.trim()) {
+        const currentUser = this.getCurrentUser();
+        if (!currentUser) return { success: false, message: 'Oturum bulunamadı!' };
+
+        const user = this.getUser(currentUser.userId) || this.getUserByUsername(currentUser.username);
+        if (!user) return { success: false, message: 'Kullanıcı bulunamadı!' };
+
+        if (user.password !== currentPass.trim()) {
             return { success: false, message: 'Mevcut şifrenizi hatalı girdiniz!' };
         }
-        if (!newPass || newPass.trim().length < 3) {
-            return { success: false, message: 'Yeni şifre en az 3 karakter olmalıdır!' };
+        if (!newPass || newPass.trim().length < 4) {
+            return { success: false, message: 'Yeni şifre en az 4 karakter olmalıdır!' };
         }
 
-        this.data.auth.password = newPass.trim();
+        user.password = newPass.trim();
         if (newUsername && newUsername.trim()) {
-            this.data.auth.username = newUsername.trim();
+            const cleanNew = newUsername.trim().toLowerCase();
+            if (cleanNew !== user.username.toLowerCase()) {
+                if (this.getUserByUsername(cleanNew)) {
+                    return { success: false, message: 'Bu kullanıcı adı zaten başka biri tarafından kullanılıyor!' };
+                }
+                user.username = cleanNew;
+            }
         }
         this.saveData();
 
+        // Oturumu güncelle
         sessionStorage.setItem(SESSION_KEY, JSON.stringify({
-            username: this.data.auth.username,
+            userId: user.id,
+            username: user.username,
+            name: user.name,
+            role: user.role,
+            department: user.department,
             loggedInAt: new Date().toISOString()
         }));
 
-        return { success: true, message: 'Kullanıcı bilgileri ve şifre başarıyla güncellendi!' };
+        if (user.role === 'admin') {
+            this.data.auth = { username: user.username, password: user.password };
+        }
+
+        return { success: true, message: 'Bilgileriniz ve şifreniz başarıyla güncellendi!' };
     }
 
     // --- AYARLAR ---
@@ -486,6 +748,7 @@ class StorageService {
             }
             this.data = {
                 auth: { ...DEFAULT_DATA.auth, ...(parsed.auth || {}) },
+                users: parsed.users || this.data.users || DEFAULT_DATA.users,
                 settings: { ...DEFAULT_DATA.settings, ...(parsed.settings || {}) },
                 courses: parsed.courses || [],
                 classes: parsed.classes || [],
