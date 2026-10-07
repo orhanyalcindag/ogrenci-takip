@@ -15,10 +15,31 @@ function initApp() {
     // İlk açılışta hiç ders yoksa örnek verileri yükle
     if (db.getCourses().length === 0 && db.getClasses().length === 0) {
         db.loadSampleData();
+    } else {
+        ensureDefaultCurriculumCourses();
     }
 
     // Oturum Kontrolü (Giriş Yapılmış mı?)
     checkAuthStatus();
+}
+
+function ensureDefaultCurriculumCourses() {
+    if (typeof MEB_CURRICULUM === 'undefined') return;
+    const existing = db.getCourses();
+    Object.values(MEB_CURRICULUM).forEach(c => {
+        const found = existing.some(e => 
+            (e.code && c.code && e.code.toLowerCase() === c.code.toLowerCase()) ||
+            e.id === c.id
+        );
+        if (!found) {
+            db.saveCourse({
+                id: c.id,
+                name: c.name,
+                code: c.code,
+                description: c.description
+            });
+        }
+    });
 }
 
 // ==========================================
@@ -159,6 +180,8 @@ function switchView(viewId) {
     if (viewId === 'view-grading') {
         populateGradingSelectors();
         renderGradingTable();
+    } else if (viewId === 'view-curriculum') {
+        if (typeof renderCurriculumView === 'function') renderCurriculumView();
     } else if (viewId === 'view-matrix') {
         populateMatrixSelectors();
         renderMatrixTable();
@@ -182,6 +205,7 @@ function renderAllViews() {
     populateGradingSelectors();
     renderGradingTable();
     updateTabBadges();
+    if (typeof renderCurriculumView === 'function') renderCurriculumView();
 }
 
 function updateTabBadges() {

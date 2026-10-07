@@ -530,17 +530,24 @@ class StorageService {
                     createdAt: new Date().toISOString()
                 },
                 {
+                    id: 'crs_btu',
+                    name: 'Bilgisayarlı Tasarım Uygulamaları',
+                    code: 'BTU',
+                    description: 'Vektörel Çizim, Piksel Tabanlı Görsel İşleme ve Kurumsal Kimlik',
+                    createdAt: new Date().toISOString()
+                },
+                {
+                    id: 'crs_robotik',
+                    name: 'Robotik Kodlama',
+                    code: 'ROBOTİK',
+                    description: 'Temel Elektronik, Mikrodenetleyiciler, Sensörler ve Otonom Robotlar',
+                    createdAt: new Date().toISOString()
+                },
+                {
                     id: 'crs_prog',
                     name: 'Programlama Temelleri',
                     code: 'PROG',
                     description: 'Algoritmalar, Değişkenler, Döngüler ve Fonksiyonlar',
-                    createdAt: new Date().toISOString()
-                },
-                {
-                    id: 'crs_grafik',
-                    name: 'Grafik ve Canlandırma',
-                    code: 'GRAF',
-                    description: 'Görsel Tasarım, UI/UX, Vektör Çizim ve Animasyon',
                     createdAt: new Date().toISOString()
                 }
             ],
