@@ -33,7 +33,6 @@ async function loadFirebaseSDK() {
 // Firebase Başlatma
 async function initFirebase() {
     const config = db.getFirebaseConfig();
-    const statusDot = document.getElementById('cloudStatusBadge');
 
     if (!config || !config.apiKey || !config.projectId) {
         setCloudStatus(false, 'Çevrimdışı / Yerel Mod');
@@ -41,9 +40,10 @@ async function initFirebase() {
     }
 
     try {
+        setCloudStatus(null, '☁️ Buluta Bağlanılıyor...');
         const sdkOk = await loadFirebaseSDK();
         if (!sdkOk) {
-            setCloudStatus(false, 'Çevrimdışı Mod');
+            setCloudStatus(false, 'Çevrimdışı Mod (İnternet Yok)');
             return false;
         }
 
@@ -52,38 +52,56 @@ async function initFirebase() {
             firestoreDb = window.fb.getFirestore(firebaseApp);
         }
 
-        isFirebaseConnected = true;
-        setCloudStatus(true, '☁️ Bulut Canlı Senkronize');
+        // İlk açılışta buluttan verileri çekmeyi 6 saniye zaman aşımı ile dene
+        const syncPromise = syncDataFromFirebase();
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('TIMEOUT_INIT')), 6000)
+        );
 
-        // İlk açılışta buluttan verileri çek
-        await syncDataFromFirebase();
+        const syncSuccess = await Promise.race([syncPromise, timeoutPromise]);
 
-        // Gerçek zamanlı değişiklikleri dinle (Real-time listener)
-        listenToFirebaseChanges();
-
-        return true;
+        if (syncSuccess) {
+            isFirebaseConnected = true;
+            setCloudStatus(true, '☁️ Bulut Canlı Senkronize');
+            listenToFirebaseChanges();
+            return true;
+        } else {
+            isFirebaseConnected = false;
+            setCloudStatus(false, 'Bulut Beklemede (Firestore Açılmalı)');
+            return false;
+        }
     } catch (e) {
-        console.error('Firebase bağlantı hatası:', e);
-        setCloudStatus(false, 'Bulut Hatası (Yerel Mod)');
+        console.warn('Firebase başlatma durumu:', e);
+        isFirebaseConnected = false;
+        if (e.message === 'TIMEOUT_INIT') {
+            setCloudStatus(false, 'Bulut Beklemede (Firestore Açılmalı)');
+        } else {
+            setCloudStatus(false, 'Çevrimdışı Mod');
+        }
         return false;
     }
 }
 
 // Durum Rozetini Güncelle
-function setCloudStatus(isOnline, text) {
+function setCloudStatus(status, text) {
     const badge = document.getElementById('cloudStatusBadge');
     if (!badge) return;
 
-    if (isOnline) {
+    if (status === true) {
         badge.innerHTML = `<span class="status-online-dot"></span> ${text}`;
         badge.style.color = 'var(--success)';
         badge.style.background = 'var(--success-light)';
         badge.style.borderColor = 'var(--success-border)';
+    } else if (status === false) {
+        badge.innerHTML = `<span style="width:8px; height:8px; border-radius:50%; background:#f59e0b; display:inline-block;"></span> ${text}`;
+        badge.style.color = '#92400e';
+        badge.style.background = '#fef3c7';
+        badge.style.borderColor = '#fde68a';
     } else {
-        badge.innerHTML = `<span style="width:8px; height:8px; border-radius:50%; background:#94a3b8; display:inline-block;"></span> ${text}`;
-        badge.style.color = 'var(--text-muted)';
-        badge.style.background = '#f1f5f9';
-        badge.style.borderColor = 'var(--border)';
+        badge.innerHTML = `<span style="width:8px; height:8px; border-radius:50%; background:#6366f1; display:inline-block;"></span> ${text}`;
+        badge.style.color = 'var(--primary)';
+        badge.style.background = 'var(--primary-light)';
+        badge.style.borderColor = 'rgba(99, 102, 241, 0.2)';
     }
 }
 
@@ -96,7 +114,6 @@ window.syncDataToFirebase = function(data) {
     syncTimeout = setTimeout(async () => {
         try {
             const docRef = window.fb.doc(firestoreDb, 'not_sistemi', 'ana_veritabani');
-            // Güvenlik ve temizlik: auth bilgilerini bulutta saklarken sadece geçerli veriyi gönder
             const payload = {
                 settings: data.settings || {},
                 courses: data.courses || [],
@@ -105,9 +122,15 @@ window.syncDataToFirebase = function(data) {
                 assignments: data.assignments || [],
                 grades: data.grades || {},
                 cleaningLogs: data.cleaningLogs || [],
+                users: data.users || [],
                 lastUpdated: new Date().toISOString()
             };
-            await window.fb.setDoc(docRef, payload);
+            
+            await Promise.race([
+                window.fb.setDoc(docRef, payload),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_SYNC')), 7000))
+            ]);
+            
             console.log('Veriler Firebase Firestore bulutuna başarıyla kaydedildi.');
             setCloudStatus(true, '☁️ Bulut Senkronize (Az Önce)');
         } catch (e) {
@@ -119,16 +142,15 @@ window.syncDataToFirebase = function(data) {
 
 // Buluttan Veri Çekme
 async function syncDataFromFirebase() {
-    if (!isFirebaseConnected || !firestoreDb) return false;
+    if (!firestoreDb) return false;
     try {
         const docRef = window.fb.doc(firestoreDb, 'not_sistemi', 'ana_veritabani');
         const docSnap = await window.fb.getDoc(docRef);
 
-        if (docSnap.exists()) {
+        if (docSnap && docSnap.exists()) {
             const cloudData = docSnap.data();
             console.log('Buluttan veri alındı:', cloudData);
             
-            // Eğer buluttaki veri geçerliyse yerel veritabanına aktar
             if (cloudData.courses || cloudData.classes) {
                 db.data.settings = { ...db.data.settings, ...(cloudData.settings || {}) };
                 db.data.courses = cloudData.courses || [];
@@ -137,16 +159,18 @@ async function syncDataFromFirebase() {
                 db.data.assignments = cloudData.assignments || [];
                 db.data.grades = cloudData.grades || {};
                 db.data.cleaningLogs = cloudData.cleaningLogs || [];
+                if (cloudData.users && cloudData.users.length > 0) {
+                    db.data.users = cloudData.users;
+                }
                 
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(db.data));
                 
-                // UI Tazele
                 if (typeof renderAllViews === 'function') renderAllViews();
                 if (typeof renderHeaderInfo === 'function') renderHeaderInfo();
             }
             return true;
         } else {
-            // Bulutta henüz veri yoksa mevcut yerel veriyi buluta ilk kez yükle
+            // Bulutta henüz döküman yoksa mevcut yerel veriyi buluta yükle
             window.syncDataToFirebase(db.data);
             return true;
         }
@@ -164,7 +188,6 @@ function listenToFirebaseChanges() {
         window.fb.onSnapshot(docRef, (docSnap) => {
             if (docSnap.exists()) {
                 const cloudData = docSnap.data();
-                // Sadece başka bir cihazdan güncelleme geldiyse yereli tazele
                 if (cloudData.lastUpdated && (!db.data.lastUpdated || cloudData.lastUpdated > db.data.lastUpdated)) {
                     db.data.courses = cloudData.courses || [];
                     db.data.classes = cloudData.classes || [];
@@ -172,6 +195,9 @@ function listenToFirebaseChanges() {
                     db.data.assignments = cloudData.assignments || [];
                     db.data.grades = cloudData.grades || {};
                     db.data.cleaningLogs = cloudData.cleaningLogs || [];
+                    if (cloudData.users && cloudData.users.length > 0) {
+                        db.data.users = cloudData.users;
+                    }
                     localStorage.setItem(STORAGE_KEY, JSON.stringify(db.data));
                     if (typeof renderAllViews === 'function') renderAllViews();
                 }
@@ -186,14 +212,39 @@ function listenToFirebaseChanges() {
 async function testFirebaseConnectionWithConfig(cfg) {
     try {
         const sdkOk = await loadFirebaseSDK();
-        if (!sdkOk) throw new Error('Firebase kütüphaneleri yüklenemedi. İnternet bağlantınızı kontrol edin.');
+        if (!sdkOk) throw new Error('Firebase SDK kütüphaneleri yüklenemedi. Lütfen internet bağlantınızı kontrol edin.');
 
-        const tempApp = window.fb.initializeApp(cfg, 'testApp_' + Date.now());
+        const tempAppName = 'testApp_' + Date.now();
+        const tempApp = window.fb.initializeApp(cfg, tempAppName);
         const tempDb = window.fb.getFirestore(tempApp);
         const testRef = window.fb.doc(tempDb, '_connection_test', 'ping');
-        await window.fb.setDoc(testRef, { test: true, time: new Date().toISOString() });
+
+        // Zaman aşımı koruması (6 saniye) - Database oluşturulmamışsa kilitlenmeyi önler
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('TIMEOUT_FIRESTORE_NOT_READY')), 6000)
+        );
+
+        await Promise.race([
+            window.fb.setDoc(testRef, { test: true, time: new Date().toISOString() }),
+            timeoutPromise
+        ]);
+
         return { success: true };
     } catch (e) {
+        if (e.message === 'TIMEOUT_FIRESTORE_NOT_READY') {
+            return {
+                success: false,
+                isNotProvisioned: true,
+                error: 'Firestore veritabanına bağlanılamadı (Zaman Aşımı). Firebase Console üzerinde henüz "Firestore Database" oluşturulmamış veya yanıt vermiyor.'
+            };
+        }
+        if (e.code === 'permission-denied' || (e.message && e.message.toLowerCase().includes('permission'))) {
+            return {
+                success: false,
+                isPermissionDenied: true,
+                error: 'Erişim engellendi (Güvenlik Kuralı Engeli). Firebase Console Kurallarında okuma/yazma izni verilmemiş.'
+            };
+        }
         return { success: false, error: e.message || 'Bağlantı kurulamadı.' };
     }
 }

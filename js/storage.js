@@ -7,6 +7,16 @@ const STORAGE_KEY = 'meslek_lise_not_sistemi_v2';
 const SESSION_KEY = 'meslek_lise_auth_session';
 const FIREBASE_CONFIG_KEY = 'meslek_lise_firebase_config';
 
+// Kullanıcının Firebase Yapılandırması (Varsayılan)
+const DEFAULT_FIREBASE_CONFIG = {
+    apiKey: "AIzaSyAcIIu9EoqxBzBp-BVfafv20QpadCThjJE",
+    authDomain: "ogrencikontroluyg.firebaseapp.com",
+    projectId: "ogrencikontroluyg",
+    storageBucket: "ogrencikontroluyg.firebasestorage.app",
+    messagingSenderId: "162235044962",
+    appId: "1:162235044962:web:bb86f611e10f58e7622d3b"
+};
+
 // Varsayılan Veri Yapısı
 const DEFAULT_DATA = {
     auth: {
@@ -716,16 +726,21 @@ class StorageService {
     getFirebaseConfig() {
         try {
             const raw = localStorage.getItem(FIREBASE_CONFIG_KEY);
-            return raw ? JSON.parse(raw) : null;
+            if (raw === 'disabled') return null;
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && parsed.apiKey && parsed.projectId) return parsed;
+            }
+            return DEFAULT_FIREBASE_CONFIG;
         } catch (e) {
-            return null;
+            return DEFAULT_FIREBASE_CONFIG;
         }
     }
 
     saveFirebaseConfig(config) {
         try {
             if (!config) {
-                localStorage.removeItem(FIREBASE_CONFIG_KEY);
+                localStorage.setItem(FIREBASE_CONFIG_KEY, 'disabled');
             } else {
                 localStorage.setItem(FIREBASE_CONFIG_KEY, JSON.stringify(config));
             }

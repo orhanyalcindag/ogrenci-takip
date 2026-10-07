@@ -465,25 +465,34 @@
                             <span>☁️</span> Google Firebase Bulut Veritabanı Senkronizasyonu
                         </h2>
                         <p style="color: #4338ca;">
-                            Verilerinizin asla kaybolmaması, ev ve okul arasında otomatik senkronize olması için Firebase ayarlarınızı buraya girin.
+                            Evdeki bilgisayarınız, telefonunuz ve okul laboratuvarı arasında verilerinizin eşzamanlı ve kayıpsız eşitlenmesini sağlar.
                         </p>
                     </div>
-                    <div style="display: flex; gap: 0.5rem;">
+                    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                        <a href="https://console.firebase.google.com/project/ogrencikontroluyg/firestore" target="_blank" class="btn btn-outline btn-sm" style="background: #ffffff; color: var(--primary); font-weight: 700; text-decoration: none;">
+                            🔗 Firebase Konsolu
+                        </a>
                         <button type="button" class="btn btn-primary btn-sm" onclick="testFirebaseConfigInput()">
                             ⚡ Bağlantıyı Test Et & Kaydet
+                        </button>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="removeFirebaseConfigPrompt()" style="color: var(--danger); border-color: #fca5a5;">
+                            🔌 Devre Dışı Bırak
                         </button>
                     </div>
                 </div>
                 <div class="card-body">
                     <div class="form-group">
-                        <label for="firebaseConfigInput">Firebase Yapılandırması (firebaseConfig JSON)</label>
-                        <textarea id="firebaseConfigInput" class="firebase-config-box" rows="5" 
+                        <label for="firebaseConfigInput" style="font-weight: 700; display: flex; justify-content: space-between;">
+                            <span>Firebase Proje Yapılandırması (JSON veya JS Nesnesi)</span>
+                            <span style="font-size: 0.78rem; color: var(--primary); font-weight: 600;">✅ Projeniz sisteme varsayılan olarak entegre edildi</span>
+                        </label>
+                        <textarea id="firebaseConfigInput" class="firebase-config-box" rows="7" 
                                   placeholder='{\n  "apiKey": "AIzaSy...",\n  "authDomain": "proje-adi.firebaseapp.com",\n  "projectId": "proje-adi",\n  "storageBucket": "proje-adi.appspot.com",\n  "messagingSenderId": "...",\n  "appId": "..."\n}'></textarea>
-                        <p class="form-help">
-                            💡 <strong>Nasıl Alınır?</strong> <a href="https://console.firebase.google.com" target="_blank" style="color: var(--primary); font-weight: bold; text-decoration: underline;">console.firebase.google.com</a> adresinden ücretsiz bir proje oluşturun ➔ Web Uygulaması (<code>&lt;/&gt;</code>) ekleyin ➔ Verilen <code>const firebaseConfig = { ... }</code> nesnesini kopyalayıp buraya yapıştırın.
+                        <p class="form-help" style="margin-top: 0.5rem; font-size: 0.8rem; line-height: 1.45;">
+                            💡 <strong>Önemli Bilgi:</strong> Firebase projenizin verileri kaydedebilmesi için Firebase Konsolunda sol menüden <strong>Firestore Database ➔ Veritabanı Oluştur (Test Modunda)</strong> adımının yapılmış olması gerekir.
                         </p>
                     </div>
-                    <div id="firebaseTestResult"></div>
+                    <div id="firebaseTestResult" style="margin-top: 0.75rem;"></div>
                 </div>
             </div>
 
@@ -650,33 +659,6 @@
                 </div>
             </div>
 
-            <!-- Google Firebase Bulut Senkronizasyonu (İsteğe Bağlı) -->
-            <div class="card">
-                <div class="card-header">
-                    <div class="card-title-group">
-                        <h2>☁️ Google Firebase Canlı Bulut Senkronizasyonu (İsteğe Bağlı)</h2>
-                        <p>Evdeki bilgisayarınız, telefonunuz ve okul laboratuvarı arasında verilerinizin eşzamanlı ve kayıpsız eşitlenmesini sağlar.</p>
-                    </div>
-                </div>
-                <div class="card-body">
-                    <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1rem; line-height: 1.5;">
-                        Firebase Console üzerinden ücretsiz bir proje açıp aldığınız web yapılandırmasını (<code>firebaseConfig</code> nesnesini veya JSON kodunu) buraya yapıştırarak anında gerçek zamanlı bulut eşitlemeyi aktif edebilirsiniz. Yapılandırma girilmediğinde sistem güvenli yerel modda (LocalStorage) çalışmaya devam eder.
-                    </p>
-                    <div class="form-group" style="margin-bottom: 1rem;">
-                        <label for="firebaseConfigInput" style="font-weight: 700;">Firebase Proje Yapılandırması (JSON veya JS Nesnesi)</label>
-                        <textarea id="firebaseConfigInput" class="form-textarea" style="width: 100%; font-family: 'JetBrains Mono', monospace; font-size: 0.82rem;" rows="5" placeholder='{&#10;  "apiKey": "AIzaSy...",&#10;  "authDomain": "proje.firebaseapp.com",&#10;  "projectId": "proje-id",&#10;  "storageBucket": "proje.appspot.com",&#10;  "messagingSenderId": "...",&#10;  "appId": "..."&#10;}'></textarea>
-                    </div>
-                    <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
-                        <button type="button" class="btn btn-primary" onclick="testFirebaseConfigInput()">
-                            ⚡ Bağlantıyı Test Et ve Kaydet
-                        </button>
-                        <button type="button" class="btn btn-outline" onclick="removeFirebaseConfigPrompt()">
-                            🔌 Bağlantıyı Kaldır (Çevrimdışı Mod)
-                        </button>
-                    </div>
-                    <div id="firebaseTestResult" style="margin-top: 1rem;"></div>
-                </div>
-            </div>
         </section>
 
     </main>

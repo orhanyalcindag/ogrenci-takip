@@ -2239,36 +2239,78 @@ async function testFirebaseConfigInput() {
             }
         }
 
-        resEl.innerHTML = '<div style="color:var(--primary); font-size:0.85rem; font-weight:600;">⏳ Firebase sunucularına bağlanılıyor...</div>';
+        resEl.innerHTML = '<div style="color:var(--primary); font-size:0.85rem; font-weight:600; padding:0.6rem; background:#eef2ff; border-radius:6px;">⏳ Firebase sunucularına bağlanılıyor, lütfen 3-5 saniye bekleyin...</div>';
 
         if (typeof testFirebaseConnectionWithConfig === 'function') {
             const testRes = await testFirebaseConnectionWithConfig(cfg);
             if (testRes.success) {
                 db.saveFirebaseConfig(cfg);
-                resEl.innerHTML = '<div style="color:var(--success); font-size:0.85rem; font-weight:700;">✅ Bağlantı başarılı! Yapılandırma kaydedildi ve bulut senkronizasyonu başlatıldı.</div>';
+                resEl.innerHTML = '<div style="color:var(--success); font-size:0.85rem; font-weight:700; padding:0.65rem; background:#ecfdf5; border-radius:6px; border:1px solid #a7f3d0;">✅ Bağlantı başarılı! Firestore bulut senkronizasyonu aktif edildi ve veritabanı eşitlemesi başlatıldı.</div>';
                 if (typeof initFirebase === 'function') initFirebase();
                 showToast('Firebase başarıyla bağlandı!', 'success');
             } else {
-                resEl.innerHTML = `<div style="color:var(--danger); font-size:0.85rem; font-weight:700;">❌ Bağlantı hatası: ${escapeHtml(testRes.error)}</div>`;
+                let helpHtml = '';
+                if (testRes.isNotProvisioned) {
+                    helpHtml = `
+                    <div style="margin-top:0.75rem; padding:0.9rem; background:#fffbeb; border:1.5px solid #fde68a; border-radius:8px; color:#92400e; font-size:0.82rem; line-height:1.5;">
+                        <strong style="display:flex; align-items:center; gap:0.35rem; font-size:0.88rem; margin-bottom:0.4rem;">
+                            <span>⚠️</span> Firebase Projenizde "Firestore Database" Henüz Oluşturulmamış!
+                        </strong>
+                        Web uygulaması açılmış ancak Firebase Console içinde <strong>Firestore Veritabanı</strong> henüz etkinleştirilmediği için sunucu yanıt vermiyor.
+                        <div style="margin-top:0.5rem; padding:0.6rem; background:#ffffff; border-radius:6px; border:1px solid #fef3c7;">
+                            <strong>Hemen Aktif Etmek İçin 2 Basit Adım:</strong>
+                            <ol style="margin:0.3rem 0 0.3rem 1.25rem; padding:0;">
+                                <li>
+                                    <a href="https://console.firebase.google.com/project/${encodeURIComponent(cfg.projectId || 'ogrencikontroluyg')}/firestore" target="_blank" style="color:#b45309; font-weight:700; text-decoration:underline;">
+                                        👉 Buraya tıklayarak Firebase Firestore Sayfasını Açın
+                                    </a>
+                                </li>
+                                <li><strong>"Veritabanı Oluştur" (Create database)</strong> butonuna basın, konumu onaylayıp <strong>"Test Modunda Başlat" (Start in test mode)</strong> seçeneğini işaretleyip tamamlayın.</li>
+                            </ol>
+                        </div>
+                        <p style="margin-top:0.5rem; font-size:0.78rem; color:#78350f;">
+                            💡 Veritabanını oluşturduktan sonra tekrar <strong>"⚡ Bağlantıyı Test Et & Kaydet"</strong> butonuna bastığınızda anında yeşil onay alacaksınız.
+                        </p>
+                    </div>`;
+                } else if (testRes.isPermissionDenied) {
+                    helpHtml = `
+                    <div style="margin-top:0.75rem; padding:0.9rem; background:#fee2e2; border:1.5px solid #fca5a5; border-radius:8px; color:#991b1b; font-size:0.82rem; line-height:1.5;">
+                        <strong style="display:flex; align-items:center; gap:0.35rem; font-size:0.88rem; margin-bottom:0.4rem;">
+                            <span>🔒</span> Firestore Güvenlik Kuralları Yazmaya Kapalı!
+                        </strong>
+                        <p>Firebase Console üzerinde Firestore açık ancak güvenlik kuralları (Rules) veri kaydını engelliyor.</p>
+                        <div style="margin-top:0.5rem; padding:0.6rem; background:#ffffff; border-radius:6px; border:1px solid #fecaca;">
+                            <strong>Çözüm:</strong>
+                            <a href="https://console.firebase.google.com/project/${encodeURIComponent(cfg.projectId || 'ogrencikontroluyg')}/firestore/rules" target="_blank" style="color:#b91c1c; font-weight:700; text-decoration:underline;">
+                                Rules (Kurallar) Sekmesini Açın
+                            </a>
+                            ve kuralları şu şekilde yapıp <strong>Yayınla (Publish)</strong> butonuna basın:
+                            <pre style="background:#1e293b; color:#38bdf8; padding:0.5rem; border-radius:4px; font-size:0.75rem; margin-top:0.3rem;">rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if true;\n    }\n  }\n}</pre>
+                        </div>
+                    </div>`;
+                }
+                resEl.innerHTML = `<div style="color:var(--danger); font-size:0.85rem; font-weight:700; padding:0.5rem; background:#fef2f2; border-radius:6px; border:1px solid #fee2e2;">❌ Bağlantı başarısız: ${escapeHtml(testRes.error)}</div>${helpHtml}`;
             }
         } else {
             db.saveFirebaseConfig(cfg);
-            resEl.innerHTML = '<div style="color:var(--success); font-size:0.85rem; font-weight:700;">✅ Yapılandırma kaydedildi!</div>';
+            resEl.innerHTML = '<div style="color:var(--success); font-size:0.85rem; font-weight:700; padding:0.5rem; background:#ecfdf5; border-radius:6px;">✅ Yapılandırma kaydedildi!</div>';
             if (typeof initFirebase === 'function') initFirebase();
             showToast('Yapılandırma kaydedildi!', 'success');
         }
     } catch (err) {
-        resEl.innerHTML = `<div style="color:var(--danger); font-size:0.85rem; font-weight:700;">❌ Hatalı biçim: ${escapeHtml(err.message)}</div>`;
+        resEl.innerHTML = `<div style="color:var(--danger); font-size:0.85rem; font-weight:700; padding:0.5rem; background:#fef2f2; border-radius:6px;">❌ Hatalı biçim: ${escapeHtml(err.message)}</div>`;
     }
 }
 
 function removeFirebaseConfigPrompt() {
-    if (confirm('Firebase bulut bağlantısını kaldırmak istediğinize emin misiniz? (Verileriniz yerel tarayıcınızda kalacaktır)')) {
+    if (confirm('Firebase bulut bağlantısını kaldırmak istediğinize emin misiniz? (Verileriniz yerel tarayıcınızda saklanmaya devam eder)')) {
         db.saveFirebaseConfig(null);
-        document.getElementById('firebaseConfigInput').value = '';
-        document.getElementById('firebaseTestResult').innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem;">Bağlantı kaldırıldı. Çevrimdışı moddasınız.</div>';
+        const fbInput = document.getElementById('firebaseConfigInput');
+        if (fbInput) fbInput.value = '';
+        const resEl = document.getElementById('firebaseTestResult');
+        if (resEl) resEl.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem; padding:0.5rem; background:#f8fafc; border-radius:6px;">Bulut bağlantısı kapatıldı. Çevrimdışı (Yerel) moddasınız.</div>';
         if (typeof setCloudStatus === 'function') setCloudStatus(false, 'Çevrimdışı Mod');
-        showToast('Firebase bağlantısı kaldırıldı.', 'info');
+        showToast('Bulut bağlantısı devre dışı bırakıldı.', 'info');
     }
 }
 
